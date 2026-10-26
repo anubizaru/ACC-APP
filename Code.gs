@@ -310,7 +310,11 @@ function ss_() {
       if (byId) return byId
     }
   } catch (err) { }
-  return SpreadsheetApp.getActiveSpreadsheet()
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet()
+    if (active) return active
+  } catch (err2) { }
+  return SpreadsheetApp.openById(DEFAULT_SHEET_ID)
 }
 
 function setup() {
@@ -374,8 +378,32 @@ function setup() {
   }
 }
 
+// รันจาก editor เมื่อลืมรหัสผ่าน หรือ login ไม่ได้ (เช่น ชีตถูกสร้างจากเวอร์ชันเก่า)
+// จะตั้งรหัสผ่านใหม่ให้ ADMIN_EMAIL แล้วแสดงใน Logs (ดูที่ ดูบันทึกการทำงาน / Execution log)
+function resetAdminPassword() {
+  var sh = ss_().getSheetByName(TAB.EMPLOYEES)
+  var rows = readAll_(TAB.EMPLOYEES)
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].email || '').toLowerCase() === String(ADMIN_EMAIL).toLowerCase()) {
+      var password = randomPass_()
+      var salt = randomSalt_()
+      rows[i].salt = salt
+      rows[i].passwordHash = hashPassword(password, salt, PBKDF2_ITER)
+      rows[i].active = 1
+      rows[i].role = 'admin'
+      updateObj_(TAB.EMPLOYEES, rows[i])
+      try { PropertiesService.getScriptProperties().setProperty('SHEET_ID', ss_().getId()) } catch (err) { }
+      Logger.log('รีเซ็ตรหัสผ่านแล้ว\nอีเมล: ' + ADMIN_EMAIL + '\nรหัสผ่านใหม่: ' + password)
+      return
+    }
+  }
+  throw new Error('ไม่พบอีเมล ' + ADMIN_EMAIL + ' ในแท็บ Employees')
+}
+
 // ★★★ แก้เป็นอีเมลของคุณก่อนรัน setup ★★★
-var ADMIN_EMAIL = 'admin@example.com'
+var ADMIN_EMAIL = 'anubizaru@gmail.com'
+// ID ของ Google Sheet (จาก URL .../d/<ID>/edit) — ใช้เป็นตัวสำรอง ถ้ายังไม่เคยรัน setup
+var DEFAULT_SHEET_ID = '12NpMIRjjPhCvqXbovpzCI6T7JDbXdVyNVt_Bbf4OSpM'
 var PBKDF2_ITER = 10000
 
 function ensureTabs_(ss) {
@@ -488,6 +516,13 @@ function getConfig_(key) {
 
 /* ---------- Web App entry ---------- */
 
+function doGet(e) {
+  // เปิด URL /exec ในเบราว์เซอร์เพื่อทดสอบว่า deploy ถูกต้อง
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, service: 'pawnshop', version: 1 }))
+    .setMimeType(ContentService.MimeType.JSON)
+}
+
 function doPost(e) {
   var out
   try {
@@ -496,7 +531,7 @@ function doPost(e) {
     out = route_(body)
   } catch (err) {
     out = { ok: false, error: 'server-error' }
-    try { Logger.log('doPost: ' + err) } catch (e2) { }
+    try { Logger.log('doPost: ' + err + (err && err.stack ? '\n' + err.stack : '')) } catch (e2) { }
   }
   return ContentService
     .createTextOutput(JSON.stringify(out))
@@ -512,7 +547,7 @@ function route_(req) {
   // สาธารณะ
   if (action === 'ping') return { ok: true, service: 'pawnshop', version: 1 }
   if (action === 'setupStatus') {
-    return { ok: true, setupDone: getConfig_('setupDone') === '1' }
+    return { ok: true, setupDone: String(getConfig_('setupDone')).trim() === '1' }
   }
   if (action === 'login') return login_(data)
 
@@ -1101,7 +1136,7 @@ function reportRange_(data, user) {
     var s = sts[i]
     var v = String(s.void) === 'TRUE' || String(s.void) === 'true'
     if (String(s.date) < start || String(s.date) > end) continue
-    if (v && s.voidOf) continue // รายการกลับถูกนับที่ตัวกลับเอง
+    // นับทั้งรายการเดิมและรายการกลับ (ติดลบ) ผลรวมจึงหักล้างเป็น 0 — เหมือนฝั่ง Accounting
     var p = byId[s.productId]
     statements.push({
       id: s.id, productId: s.productId, type: s.type, date: String(s.date),
@@ -1266,8 +1301,9 @@ function clean_(obj) {
 }
 
 function existingResult_(op) {
-  var res = {}
+  var res = null
   try { res = JSON.parse(op.resultJson) } catch (err) { }
+  if (!res) return { ok: false, error: 'incomplete-operation' } // เคยเริ่มแต่ไม่จบ — ให้ตรวจข้อมูลแล้วทำใหม่ด้วย requestId ใหม่
   res.replayed = true
   return res
 }

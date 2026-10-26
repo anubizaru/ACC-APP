@@ -440,6 +440,7 @@
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge
     },
+    mounted: function () { refresh() },
     template: '\
       <div v-if="!store.data" style="display:grid;place-items:center;padding:80px 0"><div class="spinner"></div></div>\
       <div v-else>\
@@ -595,7 +596,7 @@
 
   var Products = {
     data: function () {
-      return { store: store, q: '', filter: 'active', showForm: false, editProduct: null }
+      return { store: store, q: '', filter: 'active', dueFilter: 'all', showForm: false, editProduct: null }
     },
     computed: {
       list: function () {
@@ -605,6 +606,7 @@
         var out = store.data.products.filter(function (p) {
           if (self.filter === 'active' && Number(p.status) !== 1) return false
           if (self.filter === 'closed' && Number(p.status) !== 0) return false
+          if (self.dueFilter !== 'all' && Number(p.due) !== Number(self.dueFilter)) return false
           if (!q) return true
           var hay = (p.customerName + ' ' + p.detail + ' ' + p.productNo + ' ' + (p.customerIdCard || '')).toLowerCase()
           return hay.indexOf(q) >= 0
@@ -627,6 +629,10 @@
         </div>\
         <div class="row mb-4">\
           <input class="input" style="max-width:320px" v-model="q" placeholder="ค้นหา: ชื่อลูกค้า รายละเอียด เลขรายการ" aria-label="ค้นหาสินค้า" data-testid="input-search" />\
+          <select class="input" style="max-width:200px" v-model="dueFilter" aria-label="กรองตามกำหนดชำระ" data-testid="filter-due">\
+            <option value="all">ทุกกำหนดชำระ</option>\
+            <option v-for="d in store.data.due" :key="d.id" :value="String(d.due)">{{ d.title }}</option>\
+          </select>\
           <div class="chip-row">\
             <button class="chip" :class="{active: filter===\'active\'}" @click="filter=\'active\'">อยู่ในระบบ</button>\
             <button class="chip" :class="{active: filter===\'closed\'}" @click="filter=\'closed\'">ปิดแล้ว</button>\

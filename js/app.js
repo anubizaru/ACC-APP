@@ -791,6 +791,7 @@
         amount: defAmount,
         note: '',
         busy: false,
+        receipt: null,
         requestId: genId()
       }
     },
@@ -851,10 +852,14 @@
         }, this.requestId)
         this.busy = false
         if (res && res.ok) {
-          snack('บันทึกรายการสินค้าเลขที่ ' + this.product.productNo + ' สำเร็จ')
+          if (this.op !== 'interest') snack('บันทึกรายการสินค้าเลขที่ ' + this.product.productNo + ' สำเร็จ')
           await refresh()
           this.$emit('done')
-          this.$emit('close')
+          if (this.op === 'interest') {
+            this.receipt = { product: res.product, statement: res.statement }
+          } else {
+            this.$emit('close')
+          }
         } else {
           var msg = { 'product-closed': 'สินค้ารายการนี้ปิดไปแล้ว', 'invalid-amount': 'จำนวนเงินไม่ถูกต้อง' }
           snack('ทำรายการไม่สำเร็จ: ' + (msg[res && res.error] || (res && res.error) || 'ผิดพลาด'), true)
@@ -862,8 +867,23 @@
       }
     },
     template: '\
-      <Modal :title="title + \' · สินค้าเลขที่ \' + product.productNo" @close="$emit(\'close\')">\
-        <form @submit.prevent="submit">\
+      <Modal :title="receipt ? \'รับค่าบริการสำเร็จ\' : title + \' · สินค้าเลขที่ \' + product.productNo" @close="$emit(\'close\')">\
+        <div v-if="receipt" class="payment-receipt" data-testid="interest-receipt">\
+          <div class="payment-receipt-heading">ยืนยันการรับค่าบริการ</div>\
+          <div class="payment-receipt-product">สินค้าเลขที่ {{ receipt.product.productNo }}</div>\
+          <div class="payment-receipt-details">\
+            <div class="payment-receipt-row"><span>ชื่อลูกค้า</span><b>{{ receipt.product.customerName }}</b></div>\
+            <div class="payment-receipt-row"><span>รายการสินค้า</span><b>{{ receipt.product.detail }}</b></div>\
+            <div class="payment-receipt-row"><span>เงินต้น</span><b>{{ fmtMoney(receipt.product.price) }} ฿</b></div>\
+            <div class="payment-receipt-row"><span>ค่าบริการต่องวด</span><b>{{ fmtMoney(receipt.product.interest) }} ฿</b></div>\
+            <div class="payment-receipt-row payment-receipt-paid"><span>รับค่าบริการแล้ว</span><b>{{ fmtMoney(receipt.statement.profit) }} ฿</b></div>\
+            <div class="payment-receipt-row"><span>วันที่ทำรายการ</span><b>{{ fmtDate(receipt.statement.date) }}</b></div>\
+            <div class="payment-receipt-row payment-receipt-due"><span>ครบกำหนดครั้งถัดไป</span><b>{{ Number(receipt.product.due) === 0 ? \'ไม่มีวันครบกำหนด\' : (receipt.statement.endDateAfter && receipt.statement.endDateAfter !== \'0\' ? fmtDate(receipt.statement.endDateAfter) : \'—\') }}</b></div>\
+          </div>\
+          <p v-if="receipt.statement.note" class="payment-receipt-note">หมายเหตุ: {{ receipt.statement.note }}</p>\
+          <div class="modal-actions"><button type="button" class="btn" @click="$emit(\'close\')">ปิด</button></div>\
+        </div>\
+        <form v-else @submit.prevent="submit">\
           <div class="confirm-box">\
             <div class="row"><span class="lbl">ลูกค้า / สินค้า</span><span class="val">{{ product.customerName }} · {{ product.detail }}</span></div>\
             <div class="row"><span class="lbl">เงินต้นปัจจุบัน</span><span class="val">{{ fmtMoney(product.price) }} ฿</span></div>\
@@ -894,7 +914,7 @@
 
   var ProductDetail = {
     data: function () {
-      return { store: store, op: null, voidTarget: null, busy: false, voidRequestId: genId() }
+      return { store: store, op: null, showRecordDetails: false, voidTarget: null, busy: false, voidRequestId: genId() }
     },
     computed: {
       p: function () {
@@ -911,11 +931,23 @@
         out.sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1 })
         return out
       },
+      latestInterestStatement: function () {
+        var validStatements = this.statements.filter(function (statement) {
+          return statement.type === 'interest' && !statement.void && !statement.voidOf
+        })
+        return validStatements.length ? validStatements[validStatements.length - 1] : null
+      },
       isAdmin: function () { return store.user && store.user.role === 'admin' }
     },
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge, typeLabel: typeLabel, typeOf: typeOf,
       active: function () { return this.p && Number(this.p.status) === 1 },
+      remainingDays: function (endDate) { return daysLeft(endDate) },
+      remainingDaysClass: function (endDate) {
+        var days = daysLeft(endDate)
+        if (days < 0) return 'overdue'
+        return days <= 7 ? 'warning' : 'normal'
+      },
       dueCountdown: function (product) {
         if (Number(product.status) !== 1) return ''
         var days = daysLeft(product.endDate)
@@ -970,14 +1002,15 @@
             <div><div class="muted" style="font-size:var(--text-xs)">วันครบกำหนด</div>{{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}<div v-if="dueCountdown(p)" style="margin-top:4px"><span :class="isOverdue(p) ? \'badge pink\' : \'muted\'" style="font-size:var(--text-xs)">{{ dueCountdown(p) }}</span></div></div>\
           </div>\
         </div>\
-        <div v-if="active()" class="card">\
-          <div class="card-title">ทำรายการ</div>\
+        <div class="card">\
+          <div v-if="active()" class="card-title">ทำรายการ</div>\
           <div class="grid grid-3">\
-            <button class="btn gold" @click="op=\'interest\'" data-testid="button-op-interest">รับค่าบริการ</button>\
-            <button class="btn" @click="op=\'redeem\'" data-testid="button-op-redeem">ไถ่ถอน</button>\
-            <button class="btn outline" @click="op=\'increase\'" data-testid="button-op-increase">เพิ่มต้น</button>\
-            <button class="btn outline" @click="op=\'reduce\'" data-testid="button-op-reduce">ลดต้น</button>\
-            <button class="btn danger" @click="op=\'sale\'" data-testid="button-op-sale">ขายสินค้า</button>\
+            <button v-if="active()" class="btn gold" @click="op=\'interest\'" data-testid="button-op-interest">รับค่าบริการ</button>\
+            <button v-if="active()" class="btn" @click="op=\'redeem\'" data-testid="button-op-redeem">ไถ่ถอน</button>\
+            <button v-if="active()" class="btn outline" @click="op=\'increase\'" data-testid="button-op-increase">เพิ่มต้น</button>\
+            <button v-if="active()" class="btn outline" @click="op=\'reduce\'" data-testid="button-op-reduce">ลดต้น</button>\
+            <button v-if="active()" class="btn danger" @click="op=\'sale\'" data-testid="button-op-sale">ขายสินค้า</button>\
+            <button class="btn outline" @click="showRecordDetails = true" data-testid="button-record-details">ดูรายละเอียดรายการ</button>\
           </div>\
         </div>\
         <div class="card">\
@@ -1001,6 +1034,24 @@
           </div>\
         </div>\
         <FinanceDialog v-if="op" :product="p" :op="op" @close="op = null" />\
+        <Modal v-if="showRecordDetails" :title="\'รายละเอียดรายการ · สินค้าเลขที่ \' + p.productNo" @close="showRecordDetails = false">\
+          <div class="payment-receipt" data-testid="product-record-details">\
+            <div class="payment-receipt-heading">รายละเอียดรายการสินค้า</div>\
+            <div class="payment-receipt-product">สินค้าเลขที่ {{ p.productNo }}</div>\
+            <div class="payment-receipt-details">\
+              <div class="payment-receipt-row"><span>ชื่อลูกค้า</span><b>{{ p.customerName }}</b></div>\
+              <div class="payment-receipt-row"><span>รายการสินค้า</span><b>{{ p.detail }}</b></div>\
+              <div class="payment-receipt-row"><span>เงินต้น</span><b>{{ fmtMoney(p.price) }} ฿</b></div>\
+              <div class="payment-receipt-row"><span>ค่าบริการต่องวด</span><b>{{ fmtMoney(p.interest) }} ฿</b></div>\
+              <div v-if="latestInterestStatement" class="payment-receipt-row payment-receipt-paid"><span>รับค่าบริการล่าสุด</span><b>{{ fmtMoney(latestInterestStatement.profit) }} ฿</b></div>\
+              <div v-if="latestInterestStatement" class="payment-receipt-row"><span>วันที่รับค่าบริการล่าสุด</span><b>{{ fmtDate(latestInterestStatement.date) }}</b></div>\
+              <div class="payment-receipt-row payment-receipt-due"><span>ครบกำหนดครั้งถัดไป</span><b>{{ Number(p.due) === 0 ? \'ไม่มีวันครบกำหนด\' : (p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\') }}</b></div>\
+              <div v-if="Number(p.due) !== 0 && p.endDate && p.endDate !== \'0\'" class="payment-receipt-row payment-receipt-due payment-receipt-countdown" :class="remainingDaysClass(p.endDate)"><span>{{ remainingDays(p.endDate) < 0 ? \'เกินกำหนด\' : \'จำนวนวันคงเหลือ\' }}</span><b>{{ Math.abs(remainingDays(p.endDate)) }} วัน</b></div>\
+            </div>\
+            <p v-if="p.desc" class="payment-receipt-note">หมายเหตุ: {{ p.desc }}</p>\
+            <div class="modal-actions"><button type="button" class="btn" @click="showRecordDetails = false">ปิด</button></div>\
+          </div>\
+        </Modal>\
         <Modal v-if="voidTarget" title="ยืนยันกลับรายการ" @close="voidTarget = null">\
           <p style="font-size:var(--text-sm)">จะกลับรายการ "{{ typeLabel(voidTarget.type) }}" วันที่ {{ fmtDate(voidTarget.date) }} และคืนสถานะสินค้าก่อนรายการนั้นหรือไม่</p>\
           <div class="modal-actions">\

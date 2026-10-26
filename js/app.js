@@ -596,7 +596,7 @@
 
   var Products = {
     data: function () {
-      return { store: store, q: '', filter: 'active', dueFilter: 'all', showForm: false, editProduct: null }
+      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null }
     },
     computed: {
       list: function () {
@@ -606,17 +606,37 @@
         var out = store.data.products.filter(function (p) {
           if (self.filter === 'active' && Number(p.status) !== 1) return false
           if (self.filter === 'closed' && Number(p.status) !== 0) return false
+          if (self.filter === 'overdue' && (Number(p.status) !== 1 || daysLeft(p.endDate) === null || daysLeft(p.endDate) >= 0)) return false
           if (self.dueFilter !== 'all' && Number(p.due) !== Number(self.dueFilter)) return false
           if (!q) return true
           var hay = (p.customerName + ' ' + p.detail + ' ' + p.productNo + ' ' + (p.customerIdCard || '')).toLowerCase()
           return hay.indexOf(q) >= 0
         })
-        out.sort(function (a, b) { return Number(b.productNo) - Number(a.productNo) })
+        out.sort(function (a, b) {
+          if (self.sortBy === 'due') {
+            var aDate = a.endDate && a.endDate !== '0' ? String(a.endDate).slice(0, 10) : ''
+            var bDate = b.endDate && b.endDate !== '0' ? String(b.endDate).slice(0, 10) : ''
+            if (!aDate && bDate) return 1
+            if (aDate && !bDate) return -1
+            var dateOrder = aDate.localeCompare(bDate)
+            return self.sortDirection === 'asc' ? dateOrder : -dateOrder
+          }
+          var productNoOrder = Number(a.productNo) - Number(b.productNo)
+          return self.sortDirection === 'asc' ? productNoOrder : -productNoOrder
+        })
         return out
       }
     },
     methods: {
-      fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge
+      fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge,
+      toggleSort: function (field) {
+        if (this.sortBy !== field) {
+          this.sortBy = field
+          this.sortDirection = field === 'due' ? 'asc' : 'desc'
+        } else {
+          this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'
+        }
+      }
     },
     setup: function () {
       // เก็บ self สำหรับ computed ที่อ้าง filter ผ่าน closure
@@ -635,9 +655,12 @@
           </select>\
           <div class="chip-row">\
             <button class="chip" :class="{active: filter===\'active\'}" @click="filter=\'active\'">อยู่ในระบบ</button>\
+            <button class="chip" :class="{active: filter===\'overdue\'}" @click="filter=\'overdue\'">เกินกำหนด</button>\
             <button class="chip" :class="{active: filter===\'closed\'}" @click="filter=\'closed\'">ปิดแล้ว</button>\
             <button class="chip" :class="{active: filter===\'all\'}" @click="filter=\'all\'">ทั้งหมด</button>\
           </div>\
+          <button class="btn ghost sm" @click="toggleSort(\'due\')" :aria-pressed="sortBy === \'due\'" data-testid="button-sort-due">{{ sortBy === \'due\' ? (sortDirection === \'asc\' ? \'วันครบกำหนด ↑\' : \'วันครบกำหนด ↓\') : \'เรียงตามวันครบกำหนด\' }}</button>\
+          <button class="btn ghost sm" @click="toggleSort(\'productNo\')" :aria-pressed="sortBy === \'productNo\'" data-testid="button-sort-product-no">{{ sortBy === \'productNo\' ? (sortDirection === \'asc\' ? \'เลขที่สินค้า ↑\' : \'เลขที่สินค้า ↓\') : \'เรียงตามเลขที่สินค้า\' }}</button>\
         </div>\
         <div class="card">\
           <div v-if="list.length === 0" class="empty">\

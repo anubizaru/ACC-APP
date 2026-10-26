@@ -520,25 +520,65 @@
           startDate: p.startDate || todayStr()
         },
         busy: false,
+        applyingHistory: false,
+        historySelectedName: '',
         errs: {},
         requestId: genId()
       }
     },
     computed: {
       isEdit: function () { return !!this.product },
+      customerHistory: function () {
+        var name = this.form.customerName.trim()
+        var query = name.toLowerCase()
+        if (this.isEdit || !query || name === this.historySelectedName || !store.data) return []
+        return store.data.products.filter(function (product) {
+          return String(product.customerName || '').toLowerCase().indexOf(query) >= 0
+        }).sort(function (a, b) {
+          var dateOrder = String(b.startDate || '').localeCompare(String(a.startDate || ''))
+          return dateOrder || Number(b.productNo) - Number(a.productNo)
+        })
+      },
       endPreview: function () {
         if (this.form.due == 0) return '—'
         return fmtDate(calEndDate(Number(this.form.due), this.form.startDate))
+      }
+    },
+    watch: {
+      'form.customerName': function (name) {
+        if (name.trim() !== this.historySelectedName) this.historySelectedName = ''
       },
-      interestSuggest: function () {
-        var p = Number(this.form.price)
-        if (!p) return ''
-        return calInterest(p)
+      'form.price': function (price) {
+        if (!this.isEdit && !this.applyingHistory) this.form.interest = price ? calInterest(Number(price)) : ''
       }
     },
     methods: {
       fmtDate: fmtDate,
+      fmtMoney: fmtMoney,
+      dueLabel: dueLabel,
+      typeOf: typeOf,
       num: function (v) { return Number(v) },
+      useHistory: function (product) {
+        var self = this
+        this.applyingHistory = true
+        var fields = ['customerIdCard', 'typeId', 'detail', 'desc', 'price', 'interest', 'due']
+        for (var i = 0; i < fields.length; i++) {
+          var field = fields[i]
+          if ((this.form[field] === '' || this.form[field] == null) && product[field] != null && product[field] !== '') {
+            this.form[field] = product[field]
+          }
+        }
+        this.form.customerName = product.customerName || this.form.customerName
+        this.historySelectedName = this.form.customerName.trim()
+        this.$nextTick(function () { self.applyingHistory = false })
+      },
+      startNewFromHistory: function () {
+        if (!this.customerHistory.length) return
+        var customer = this.customerHistory[0]
+        this.form.customerName = customer.customerName || this.form.customerName
+        this.form.customerIdCard = customer.customerIdCard || ''
+        this.historySelectedName = this.form.customerName.trim()
+      },
       validate: function () {
         var e = {}
         if (!this.form.customerName.trim()) e.customerName = 'กรุณากรอกชื่อลูกค้า'
@@ -586,6 +626,15 @@
           <div class="field"><label for="pf-name">ชื่อลูกค้า *</label>\
             <input id="pf-name" class="input" :class="{invalid: errs.customerName}" v-model="form.customerName" data-testid="input-customer" />\
             <span v-if="errs.customerName" class="err">{{ errs.customerName }}</span>\
+            <div v-if="customerHistory.length || (form.customerName.trim() && !isEdit && form.customerName.trim() !== historySelectedName)" class="customer-history" aria-label="ประวัติรายการของลูกค้า">\
+              <div class="customer-history-title">ประวัติรายการ ({{ customerHistory.length }})</div>\
+              <button v-if="customerHistory.length" type="button" class="customer-history-new" @click="startNewFromHistory">+ เพิ่มรายการใหม่ (ใช้เฉพาะชื่อและเลขบัตรประชาชน)</button>\
+              <div v-if="customerHistory.length === 0" class="customer-history-empty">ไม่พบประวัติรายการของชื่อนี้</div>\
+              <button v-for="item in customerHistory" :key="item.id" type="button" class="customer-history-item" @click="useHistory(item)" :aria-label="\'เลือกรายการเลขที่ \' + item.productNo + \' \' + item.detail">\
+                <span class="customer-history-main"><b>เลขที่ {{ item.productNo }}</b><span>{{ item.detail || \'ไม่ระบุรายละเอียด\' }}</span></span>\
+                <span class="customer-history-meta">{{ fmtDate(item.startDate) }} · {{ typeOf(item.typeId) }} · ต้น {{ fmtMoney(item.price) }} ฿ · ค่าบริการ {{ fmtMoney(item.interest) }} ฿ · {{ dueLabel(item.due) }}</span>\
+              </button>\
+            </div>\
           </div>\
           <div class="field"><label for="pf-card">เลขบัตรประชาชน</label>\
             <input id="pf-card" class="input" v-model="form.customerIdCard" inputmode="numeric" />\
@@ -607,7 +656,6 @@
               </div>\
               <div class="field"><label for="pf-int">ค่าบริการต่องวด (บาท) *</label>\
                 <input id="pf-int" class="input" type="number" min="0" step="1" :class="{invalid: errs.interest}" v-model.number="form.interest" data-testid="input-interest" />\
-                <span v-if="interestSuggest" class="hint">แนะนำ: {{ interestSuggest }}</span>\
                 <span v-if="errs.interest" class="err">{{ errs.interest }}</span>\
               </div>\
             </div>\

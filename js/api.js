@@ -34,8 +34,6 @@ var PawnAPI = (function () {
     return {
       demo: true,
       async call(action, data, requestId, token) {
-        // หน่วงเล็กน้อยให้เหมือนเรียกเครือข่ายจริง
-        await new Promise(function (r) { setTimeout(r, 120) })
         return window.DemoEngine.route_({ action: action, data: data, requestId: requestId, token: token })
       }
     }

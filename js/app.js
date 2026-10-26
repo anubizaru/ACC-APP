@@ -59,8 +59,6 @@
     store.snack.show = true
     store.snack.text = text
     store.snack.err = !!err
-    clearTimeout(snack._t)
-    snack._t = setTimeout(function () { store.snack.show = false }, 3200)
   }
 
   async function call(action, data, requestId) {

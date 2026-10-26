@@ -182,6 +182,11 @@ a, button, input, textarea, select { transition: color var(--transition), backgr
 @media (min-width: 900px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } .grid-4 { grid-template-columns: repeat(4, 1fr); } }
 
 .stat { padding: var(--space-4); }
+.dashboard-stat { height: 132px; min-height: 132px; display: flex; flex-direction: column; overflow: hidden; }
+.grid > .dashboard-stat + .dashboard-stat { margin-top: 0; }
+.dashboard-stat .stat-label { height: 2.8em; flex: none; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.dashboard-stat .stat-value { margin-top: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-stat .stat-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat .stat-label { font-size: var(--text-xs); color: var(--color-text-muted); }
 .stat .stat-value { font-size: var(--text-lg); font-weight: 700; margin-top: var(--space-1); font-variant-numeric: tabular-nums; }
 .stat .stat-hint { font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-1); }

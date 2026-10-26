@@ -417,13 +417,20 @@
         return store.data.products.filter(function (p) { return Number(p.status) === 1 }).length
       },
       principalSummary: function () {
-        var summary = { total: 0, overdue: 0, onTime: 0 }
+        var summary = { total: 0, overdue: 0, onTime: 0, totalCount: 0, overdueCount: 0, onTimeCount: 0 }
         if (!store.data) return summary
         store.data.products.forEach(function (p) {
           if (Number(p.status) !== 1) return
           var amount = Number(p.price) || 0
+          var remainingDays = daysLeft(p.endDate)
           summary.total += amount
-          if (daysLeft(p.endDate) !== null && daysLeft(p.endDate) < 0) summary.overdue += amount
+          summary.totalCount += 1
+          if (remainingDays !== null && remainingDays < 0) {
+            summary.overdue += amount
+            summary.overdueCount += 1
+          } else {
+            summary.onTimeCount += 1
+          }
         })
         summary.onTime = summary.total - summary.overdue
         return summary
@@ -460,15 +467,15 @@
       <div v-if="!store.data" style="display:grid;place-items:center;padding:80px 0"><div class="spinner"></div></div>\
       <div v-else>\
         <h2 class="page-title">หน้าหลัก</h2>\
-        <p class="page-sub">สินค้าในระบบ {{ activeCount }} รายการ</p>\
-        <div class="grid grid-3 mb-4">\
-          <div class="card stat profit"><div class="stat-label">เงินต้นสินค้าคงเหลือทั้งหมด</div><div class="stat-value">{{ fmtMoney(principalSummary.total) }} ฿</div></div>\
-          <div class="card stat out"><div class="stat-label">เงินต้นสินค้าเกินกำหนด</div><div class="stat-value">{{ fmtMoney(principalSummary.overdue) }} ฿</div></div>\
-          <div class="card stat in"><div class="stat-label">เงินต้นสินค้าตามกำหนด</div><div class="stat-value">{{ fmtMoney(principalSummary.onTime) }} ฿</div></div>\
+        <div class="grid grid-4 mb-4">\
+          <div class="card stat dashboard-stat"><div class="stat-label">สินค้าในระบบ</div><div class="stat-value">{{ activeCount }}</div><div class="stat-hint">รายการที่ยังเปิดอยู่</div></div>\
+          <div class="card stat profit dashboard-stat"><div class="stat-label">เงินต้นสินค้าคงเหลือทั้งหมด</div><div class="stat-value">{{ fmtMoney(principalSummary.total) }} ฿</div><div class="stat-hint">{{ principalSummary.totalCount }} รายการ</div></div>\
+          <div class="card stat out dashboard-stat"><div class="stat-label">เงินต้นสินค้าเกินกำหนด</div><div class="stat-value">{{ fmtMoney(principalSummary.overdue) }} ฿</div><div class="stat-hint">{{ principalSummary.overdueCount }} รายการ</div></div>\
+          <div class="card stat in dashboard-stat"><div class="stat-label">เงินต้นสินค้าตามกำหนด</div><div class="stat-value">{{ fmtMoney(principalSummary.onTime) }} ฿</div><div class="stat-hint">{{ principalSummary.onTimeCount }} รายการ</div></div>\
         </div>\
         <h3 class="card-title">เงินต้นคงเหลือตามกำหนดชำระ</h3>\
         <div class="grid grid-4 mb-4">\
-          <div v-for="item in principalByDue" :key="item.id" class="card stat">\
+          <div v-for="item in principalByDue" :key="item.id" class="card stat dashboard-stat">\
             <div class="stat-label">{{ item.title }}</div>\
             <div class="stat-value">{{ fmtMoney(item.amount) }} ฿</div>\
             <div class="stat-hint">{{ item.count }} รายการ</div>\

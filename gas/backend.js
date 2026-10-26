@@ -469,6 +469,16 @@ function validateProduct_(data, isCreate) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(out.startDate)) return { error: 'startDate' }
     out.endDate = calEndDate(out.due, out.startDate)
     out.desc = String(data.desc || '').trim()
+    if (data.productNo === undefined || data.productNo === null || data.productNo === '') {
+      out.productNo = nextProductNo_()
+    } else {
+      out.productNo = toIntBaht(data.productNo)
+      if (out.productNo === null || out.productNo <= 0) return { error: 'productNo' }
+      var products = readAll_(TAB.PRODUCTS)
+      for (var i = 0; i < products.length; i++) {
+        if (Number(products[i].productNo) === out.productNo) return { error: 'productNo-taken' }
+      }
+    }
   }
   return { value: out }
 }
@@ -479,7 +489,7 @@ function productCreate_(data, user, requestId) {
     var v = validateProduct_(data, true)
     if (v.error) return { ok: false, error: 'invalid-' + v.error }
 
-    var productNo = nextProductNo_()
+    var productNo = v.value.productNo
     var id = uuid_()
     var product = {
       id: id, productNo: productNo, customerName: v.value.customerName,

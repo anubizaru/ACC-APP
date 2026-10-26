@@ -94,7 +94,7 @@ const ContentService = {
 
 function loadGas(adminEmail) {
   let code = fs.readFileSync('Code.gs', 'utf8')
-  code = code.replace("var ADMIN_EMAIL = 'admin@example.com'", "var ADMIN_EMAIL = '" + adminEmail + "'")
+  code = code.replace(/var ADMIN_EMAIL = '[^']*'/, "var ADMIN_EMAIL = '" + adminEmail + "'")
   const mod = { exports: {} }
   const fn = new Function(
     'module', 'SpreadsheetApp', 'PropertiesService', 'CacheService', 'LockService', 'Utilities', 'Logger', 'ContentService',
@@ -187,6 +187,17 @@ const boot1 = G.route_({ action: 'bootstrap', token: token })
 eq('มีสินค้า 1 รายการ (ไม่ซ้ำ)', boot1.products.length, 1)
 eq('มี statement 1 รายการ (ไม่ซ้ำ)', boot1.statements.length, 1)
 
+const customNoRes = G.route_({
+  action: 'product.create', token: token, requestId: 'rq-create-custom-no',
+  data: { productNo: 20, customerName: 'ลูกค้ากำหนดเลขเอง', detail: 'แหวน', price: 500, interest: 25, due: 30, startDate: '2026-01-01', typeId: 'ทอง-ประเภท' }
+})
+okTrue('กำหนดเลขที่สินค้าเองได้', customNoRes.ok === true)
+eq('เลขที่สินค้าตามที่กำหนด', customNoRes.product.productNo, 20)
+eq('เลขที่สินค้าซ้ำถูกปฏิเสธ', G.route_({
+  action: 'product.create', token: token, requestId: 'rq-create-duplicate-no',
+  data: { productNo: 20, customerName: 'ลูกค้าซ้ำ', detail: 'แหวน', price: 500, interest: 25, due: 30, startDate: TODAY, typeId: 'ทอง-ประเภท' }
+}), { ok: false, error: 'invalid-productNo-taken' })
+
 // 9) รับดอกเบี้ย 50 บาท
 const intRes = G.route_({
   action: 'finance.op', token: token, requestId: 'rq-int-1',
@@ -256,6 +267,7 @@ const staffToken = staffLogin.token
 // staff ทำรายการได้
 const st2 = G.route_({ action: 'product.create', token: staffToken, requestId: 'rq-create-2', data: { customerName: 'ลูกค้า 2', detail: 'แหวน', price: 500, interest: 30, due: 15, typeId: 'ทอง-ประเภท', startDate: TODAY } })
 okTrue('staff สร้างสินค้าได้', st2.ok === true)
+eq('เลขอัตโนมัติต่อจากเลขสูงสุด', st2.product.productNo, 21)
 // staff ห้ามจัดการผู้ใช้
 eq('staff ห้ามจัดการผู้ใช้', G.route_({ action: 'user.save', token: staffToken, requestId: 'rq-user-2', data: { name: 'x', email: 'x@x.test', password: '123456' } }), { ok: false, error: 'forbidden' })
 // staff ห้ามกลับรายการ

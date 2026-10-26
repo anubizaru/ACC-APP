@@ -7,7 +7,7 @@ const fs = require('fs')
 const crypto = require('crypto')
 
 let code = fs.readFileSync('Code.gs', 'utf8')
-code = code.replace("var ADMIN_EMAIL = 'admin@example.com'", "var ADMIN_EMAIL = 'demo@pawn.test'")
+code = code.replace(/var ADMIN_EMAIL = '[^']*'/, "var ADMIN_EMAIL = 'demo@pawn.test'")
 
 const TODAY = new Date()
 const p = n => String(n).padStart(2, '0')

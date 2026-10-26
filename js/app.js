@@ -474,10 +474,15 @@
     emits: ['close', 'saved'],
     data: function () {
       var p = this.product || {}
+      var products = store.data ? store.data.products : []
+      var nextProductNo = products.reduce(function (max, item) {
+        return Math.max(max, Number(item.productNo) || 0)
+      }, 0) + 1
       return {
         store: store,
         form: {
           id: p.id || null,
+          productNo: p.productNo != null ? p.productNo : nextProductNo,
           customerName: p.customerName || '',
           customerIdCard: p.customerIdCard || '',
           typeId: p.typeId || (store.data && store.data.types[0] ? store.data.types[0].id : ''),
@@ -514,6 +519,8 @@
         if (!this.form.detail.trim()) e.detail = 'กรุณากรอกรายละเอียดสินค้า'
         if (!this.form.typeId) e.typeId = 'เลือกประเภทสินค้า'
         if (!this.isEdit) {
+          var productNo = Number(this.form.productNo)
+          if (!Number.isInteger(productNo) || productNo <= 0) e.productNo = 'เลขที่สินค้าต้องเป็นจำนวนเต็มบวก'
           var price = Number(this.form.price)
           if (!price || price <= 0 || !Number.isInteger(price)) e.price = 'ราคาต้องเป็นจำนวนเต็มบาท มากกว่า 0'
           var it = Number(this.form.interest)
@@ -534,13 +541,22 @@
           this.$emit('saved', res.product)
           this.$emit('close')
         } else {
-          snack('บันทึกไม่สำเร็จ (' + ((res && res.error) || '') + ')', true)
+          var errorMessages = {
+            'invalid-productNo': 'เลขที่สินค้าต้องเป็นจำนวนเต็มบวก',
+            'invalid-productNo-taken': 'เลขที่สินค้านี้มีอยู่แล้ว กรุณาใช้เลขอื่น'
+          }
+          var error = res && res.error
+          snack('บันทึกไม่สำเร็จ (' + (errorMessages[error] || error || 'ผิดพลาด') + ')', true)
         }
       }
     },
     template: '\
       <Modal :title="isEdit ? \'แก้ไขข้อมูลสินค้า\' : \'รับสินค้าใหม่\'" @close="$emit(\'close\')">\
         <form @submit.prevent="submit">\
+          <div v-if="!isEdit" class="field"><label for="pf-product-no">เลขที่สินค้า *</label>\
+            <input id="pf-product-no" class="input" type="number" min="1" step="1" :class="{invalid: errs.productNo}" v-model.number="form.productNo" data-testid="input-product-no" />\
+            <span v-if="errs.productNo" class="err">{{ errs.productNo }}</span>\
+          </div>\
           <div class="field"><label for="pf-name">ชื่อลูกค้า *</label>\
             <input id="pf-name" class="input" :class="{invalid: errs.customerName}" v-model="form.customerName" data-testid="input-customer" />\
             <span v-if="errs.customerName" class="err">{{ errs.customerName }}</span>\
@@ -606,7 +622,10 @@
         var out = store.data.products.filter(function (p) {
           if (self.filter === 'active' && Number(p.status) !== 1) return false
           if (self.filter === 'closed' && Number(p.status) !== 0) return false
-          if (self.filter === 'overdue' && (Number(p.status) !== 1 || daysLeft(p.endDate) === null || daysLeft(p.endDate) >= 0)) return false
+          if (self.filter === 'overdue') {
+            var remainingDays = daysLeft(p.endDate)
+            if (Number(p.status) !== 1 || remainingDays === null || remainingDays >= 0) return false
+          }
           if (self.dueFilter !== 'all' && Number(p.due) !== Number(self.dueFilter)) return false
           if (!q) return true
           var hay = (p.customerName + ' ' + p.detail + ' ' + p.productNo + ' ' + (p.customerIdCard || '')).toLowerCase()
@@ -670,7 +689,7 @@
           <div v-for="p in list" :key="p.id" class="prod-card" @click="$go(\'product/\' + p.id)" :data-testid="\'card-product-\' + p.id">\
             <div class="prod-no">{{ p.productNo }}</div>\
             <div class="grow">\
-              <div class="row spread"><b>{{ p.customerName }}</b><span v-html="statusBadge(p)"></span></div>\
+              <div class="row"><span v-html="statusBadge(p)"></span><b>{{ p.customerName }}</b></div>\
               <div class="muted" style="font-size:var(--text-sm)">{{ p.detail }}</div>\
               <div class="muted" style="font-size:var(--text-xs)">ต้น {{ fmtMoney(p.price) }} ฿ · ดอก {{ fmtMoney(p.interest) }} ฿ · {{ dueLabel(p.due) }} · {{ fmtDate(p.startDate) }}<span v-if="p.endDate && p.endDate !== \'0\'"> – {{ fmtDate(p.endDate) }}</span></div>\
             </div>\
@@ -822,6 +841,16 @@
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge, typeLabel: typeLabel, typeOf: typeOf,
       active: function () { return this.p && Number(this.p.status) === 1 },
+      dueCountdown: function (product) {
+        if (Number(product.status) !== 1) return ''
+        var days = daysLeft(product.endDate)
+        if (days === null) return ''
+        return days < 0 ? 'เกินกำหนด ' + (-days) + ' วัน' : 'เหลือ ' + days + ' วัน'
+      },
+      isOverdue: function (product) {
+        var days = daysLeft(product.endDate)
+        return Number(product.status) === 1 && days !== null && days < 0
+      },
       cashIn: function (s) {
         var v = Number(s.income) + Number(s.profit)
         return v > 0 ? '+' + fmtMoney(v) : '—'
@@ -863,7 +892,7 @@
             <div><div class="muted" style="font-size:var(--text-xs)">เงินต้น</div><b>{{ fmtMoney(p.price) }} ฿</b></div>\
             <div><div class="muted" style="font-size:var(--text-xs)">ดอกเบี้ยต่องวด</div><b>{{ fmtMoney(p.interest) }} ฿</b></div>\
             <div><div class="muted" style="font-size:var(--text-xs)">วันที่รับ</div>{{ fmtDate(p.startDate) }}</div>\
-            <div><div class="muted" style="font-size:var(--text-xs)">วันครบกำหนด</div>{{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}</div>\
+            <div><div class="muted" style="font-size:var(--text-xs)">วันครบกำหนด</div>{{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}<div v-if="dueCountdown(p)" style="margin-top:4px"><span :class="isOverdue(p) ? \'badge pink\' : \'muted\'" style="font-size:var(--text-xs)">{{ dueCountdown(p) }}</span></div></div>\
           </div>\
         </div>\
         <div v-if="active()" class="card">\

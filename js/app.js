@@ -684,9 +684,53 @@
 
   /* ---------- สินค้า (รายการ) ---------- */
 
+  var ProductRecordDialog = {
+    props: ['product', 'statements'],
+    computed: {
+      latestInterestStatement: function () {
+        var statements = this.statements.filter(function (statement) {
+          return statement.type === 'interest' && !statement.void && !statement.voidOf
+        })
+        statements.sort(function (a, b) {
+          return String(a.createdAt || a.date || '').localeCompare(String(b.createdAt || b.date || ''))
+        })
+        return statements.length ? statements[statements.length - 1] : null
+      }
+    },
+    methods: {
+      fmtDate: fmtDate,
+      fmtMoney: fmtMoney,
+      remainingDays: function (endDate) { return daysLeft(endDate) },
+      remainingDaysClass: function (endDate) {
+        var days = daysLeft(endDate)
+        if (days < 0) return 'overdue'
+        return days <= 7 ? 'warning' : 'normal'
+      }
+    },
+    template: '\
+      <Modal :title="\'รายละเอียดรายการ · สินค้าเลขที่ \' + product.productNo" @close="$emit(\'close\')">\
+        <div class="payment-receipt" data-testid="product-record-details">\
+          <div class="payment-receipt-heading">รายละเอียดรายการสินค้า</div>\
+          <div class="payment-receipt-product">สินค้าเลขที่ {{ product.productNo }}</div>\
+          <div class="payment-receipt-details">\
+            <div class="payment-receipt-row"><span>ชื่อลูกค้า</span><b>{{ product.customerName }}</b></div>\
+            <div class="payment-receipt-row"><span>รายการสินค้า</span><b>{{ product.detail }}</b></div>\
+            <div class="payment-receipt-row"><span>เงินต้น</span><b>{{ fmtMoney(product.price) }} ฿</b></div>\
+            <div class="payment-receipt-row"><span>ค่าบริการต่องวด</span><b>{{ fmtMoney(product.interest) }} ฿</b></div>\
+            <div v-if="latestInterestStatement" class="payment-receipt-row payment-receipt-paid"><span>รับค่าบริการล่าสุด</span><b>{{ fmtMoney(latestInterestStatement.profit) }} ฿</b></div>\
+            <div v-if="latestInterestStatement" class="payment-receipt-row"><span>วันที่รับค่าบริการล่าสุด</span><b>{{ fmtDate(latestInterestStatement.date) }}</b></div>\
+            <div class="payment-receipt-row payment-receipt-due"><span>ครบกำหนดครั้งถัดไป</span><b>{{ Number(product.due) === 0 ? \'ไม่มีวันครบกำหนด\' : (product.endDate && product.endDate !== \'0\' ? fmtDate(product.endDate) : \'—\') }}</b></div>\
+            <div v-if="Number(product.due) !== 0 && product.endDate && product.endDate !== \'0\'" class="payment-receipt-row payment-receipt-due payment-receipt-countdown" :class="remainingDaysClass(product.endDate)"><span>{{ remainingDays(product.endDate) < 0 ? \'เกินกำหนด\' : \'จำนวนวันคงเหลือ\' }}</span><b>{{ Math.abs(remainingDays(product.endDate)) }} วัน</b></div>\
+          </div>\
+          <p v-if="product.desc" class="payment-receipt-note">หมายเหตุ: {{ product.desc }}</p>\
+          <div class="modal-actions"><button type="button" class="btn" @click="$emit(\'close\')">ปิด</button></div>\
+        </div>\
+      </Modal>'
+  }
+
   var Products = {
     data: function () {
-      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null }
+      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null }
     },
     computed: {
       list: function () {
@@ -722,6 +766,10 @@
     },
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge,
+      statementsFor: function (product) {
+        if (!store.data) return []
+        return store.data.statements.filter(function (statement) { return statement.productId === product.id })
+      },
       toggleSort: function (field) {
         if (this.sortBy !== field) {
           this.sortBy = field
@@ -768,10 +816,11 @@
               <div class="sub">ต้น {{ fmtMoney(p.price) }} ฿ · ค่าบริการ {{ fmtMoney(p.interest) }} ฿ · รับ {{ fmtDate(p.startDate) }}</div>\
             </div>\
             <span v-html="statusBadge(p)"></span>\
-            <button class="btn ghost sm" @click.stop="editProduct = p; showForm = true">แก้ไข</button>\
+            <button class="btn ghost sm" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-record-details-\' + p.id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>\
           </div>\
         </div>\
         <ProductForm v-if="showForm" :product="editProduct" @close="showForm = false" @saved="editProduct = null" />\
+        <ProductRecordDialog v-if="recordProduct" :product="recordProduct" :statements="statementsFor(recordProduct)" @close="recordProduct = null" />\
       </div>'
   }
 
@@ -914,7 +963,7 @@
 
   var ProductDetail = {
     data: function () {
-      return { store: store, op: null, showRecordDetails: false, voidTarget: null, busy: false, voidRequestId: genId() }
+      return { store: store, op: null, showEditForm: false, voidTarget: null, busy: false, voidRequestId: genId() }
     },
     computed: {
       p: function () {
@@ -931,23 +980,11 @@
         out.sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1 })
         return out
       },
-      latestInterestStatement: function () {
-        var validStatements = this.statements.filter(function (statement) {
-          return statement.type === 'interest' && !statement.void && !statement.voidOf
-        })
-        return validStatements.length ? validStatements[validStatements.length - 1] : null
-      },
       isAdmin: function () { return store.user && store.user.role === 'admin' }
     },
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge, typeLabel: typeLabel, typeOf: typeOf,
       active: function () { return this.p && Number(this.p.status) === 1 },
-      remainingDays: function (endDate) { return daysLeft(endDate) },
-      remainingDaysClass: function (endDate) {
-        var days = daysLeft(endDate)
-        if (days < 0) return 'overdue'
-        return days <= 7 ? 'warning' : 'normal'
-      },
       dueCountdown: function (product) {
         if (Number(product.status) !== 1) return ''
         var days = daysLeft(product.endDate)
@@ -1010,7 +1047,7 @@
             <button v-if="active()" class="btn outline" @click="op=\'increase\'" data-testid="button-op-increase">เพิ่มต้น</button>\
             <button v-if="active()" class="btn outline" @click="op=\'reduce\'" data-testid="button-op-reduce">ลดต้น</button>\
             <button v-if="active()" class="btn danger" @click="op=\'sale\'" data-testid="button-op-sale">ขายสินค้า</button>\
-            <button class="btn outline" @click="showRecordDetails = true" data-testid="button-record-details">ดูรายละเอียดรายการ</button>\
+            <button class="btn outline" @click="showEditForm = true" data-testid="button-edit-product">แก้ไข</button>\
           </div>\
         </div>\
         <div class="card">\
@@ -1034,24 +1071,7 @@
           </div>\
         </div>\
         <FinanceDialog v-if="op" :product="p" :op="op" @close="op = null" />\
-        <Modal v-if="showRecordDetails" :title="\'รายละเอียดรายการ · สินค้าเลขที่ \' + p.productNo" @close="showRecordDetails = false">\
-          <div class="payment-receipt" data-testid="product-record-details">\
-            <div class="payment-receipt-heading">รายละเอียดรายการสินค้า</div>\
-            <div class="payment-receipt-product">สินค้าเลขที่ {{ p.productNo }}</div>\
-            <div class="payment-receipt-details">\
-              <div class="payment-receipt-row"><span>ชื่อลูกค้า</span><b>{{ p.customerName }}</b></div>\
-              <div class="payment-receipt-row"><span>รายการสินค้า</span><b>{{ p.detail }}</b></div>\
-              <div class="payment-receipt-row"><span>เงินต้น</span><b>{{ fmtMoney(p.price) }} ฿</b></div>\
-              <div class="payment-receipt-row"><span>ค่าบริการต่องวด</span><b>{{ fmtMoney(p.interest) }} ฿</b></div>\
-              <div v-if="latestInterestStatement" class="payment-receipt-row payment-receipt-paid"><span>รับค่าบริการล่าสุด</span><b>{{ fmtMoney(latestInterestStatement.profit) }} ฿</b></div>\
-              <div v-if="latestInterestStatement" class="payment-receipt-row"><span>วันที่รับค่าบริการล่าสุด</span><b>{{ fmtDate(latestInterestStatement.date) }}</b></div>\
-              <div class="payment-receipt-row payment-receipt-due"><span>ครบกำหนดครั้งถัดไป</span><b>{{ Number(p.due) === 0 ? \'ไม่มีวันครบกำหนด\' : (p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\') }}</b></div>\
-              <div v-if="Number(p.due) !== 0 && p.endDate && p.endDate !== \'0\'" class="payment-receipt-row payment-receipt-due payment-receipt-countdown" :class="remainingDaysClass(p.endDate)"><span>{{ remainingDays(p.endDate) < 0 ? \'เกินกำหนด\' : \'จำนวนวันคงเหลือ\' }}</span><b>{{ Math.abs(remainingDays(p.endDate)) }} วัน</b></div>\
-            </div>\
-            <p v-if="p.desc" class="payment-receipt-note">หมายเหตุ: {{ p.desc }}</p>\
-            <div class="modal-actions"><button type="button" class="btn" @click="showRecordDetails = false">ปิด</button></div>\
-          </div>\
-        </Modal>\
+        <ProductForm v-if="showEditForm" :product="p" @close="showEditForm = false" />\
         <Modal v-if="voidTarget" title="ยืนยันกลับรายการ" @close="voidTarget = null">\
           <p style="font-size:var(--text-sm)">จะกลับรายการ "{{ typeLabel(voidTarget.type) }}" วันที่ {{ fmtDate(voidTarget.date) }} และคืนสถานะสินค้าก่อนรายการนั้นหรือไม่</p>\
           <div class="modal-actions">\
@@ -1657,7 +1677,7 @@
 
   var app = createApp(Root)
   // register ทุก component แบบ global เพื่อให้ component ที่ซ้อนกัน (Modal/ProductForm/FinanceDialog) ใช้ได้
-  var allComponents = { Snackbar: Snackbar, Modal: Modal, Welcome: Welcome, Login: Login, Nav: Nav, Dashboard: Dashboard, ProductForm: ProductForm, Products: Products, FinanceDialog: FinanceDialog, ProductDetail: ProductDetail, Accounting: Accounting, Creditors: Creditors, Reports: Reports, Settings: Settings, Guide: Guide }
+  var allComponents = { Snackbar: Snackbar, Modal: Modal, Welcome: Welcome, Login: Login, Nav: Nav, Dashboard: Dashboard, ProductForm: ProductForm, ProductRecordDialog: ProductRecordDialog, Products: Products, FinanceDialog: FinanceDialog, ProductDetail: ProductDetail, Accounting: Accounting, Creditors: Creditors, Reports: Reports, Settings: Settings, Guide: Guide }
   Object.keys(allComponents).forEach(function (k) { app.component(k, allComponents[k]) })
   // helper ให้ทุก component เข้าถึงการเปลี่ยนหน้าแบบง่าย
   app.config.globalProperties.$go = function (path) { location.hash = '#/' + path }

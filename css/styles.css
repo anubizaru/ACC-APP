@@ -267,9 +267,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .clickable { cursor: pointer; }
 .clickable:hover { background: var(--color-surface-offset); }
 
-/* product card */
-.prod-card { display: flex; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); cursor: pointer; }
-.prod-card:hover { background: var(--color-surface-offset); }
 .prod-no {
   width: 46px; height: 46px; flex-shrink: 0;
   border-radius: var(--radius-md);

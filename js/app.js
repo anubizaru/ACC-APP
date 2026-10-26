@@ -712,13 +712,14 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>\
             ไม่พบสินค้า\
           </div>\
-          <div v-for="p in list" :key="p.id" class="prod-card" @click="$go(\'product/\' + p.id)" :data-testid="\'card-product-\' + p.id">\
+          <div v-for="p in list" :key="p.id" class="list-row clickable" @click="$go(\'product/\' + p.id)" :data-testid="\'card-product-\' + p.id">\
             <div class="prod-no">{{ p.productNo }}</div>\
             <div class="grow">\
-              <div class="row"><span v-html="statusBadge(p)"></span><b>{{ p.customerName }}</b></div>\
-              <div class="muted" style="font-size:var(--text-sm)">{{ p.detail }}</div>\
-              <div class="muted" style="font-size:var(--text-xs)">ต้น {{ fmtMoney(p.price) }} ฿ · ดอก {{ fmtMoney(p.interest) }} ฿ · {{ dueLabel(p.due) }} · {{ fmtDate(p.startDate) }}<span v-if="p.endDate && p.endDate !== \'0\'"> – {{ fmtDate(p.endDate) }}</span></div>\
+              <div class="title">{{ p.customerName }}</div>\
+              <div class="sub">{{ p.detail }} · {{ dueLabel(p.due) }} · ครบกำหนด {{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}</div>\
+              <div class="sub">ต้น {{ fmtMoney(p.price) }} ฿ · ดอก {{ fmtMoney(p.interest) }} ฿ · รับ {{ fmtDate(p.startDate) }}</div>\
             </div>\
+            <span v-html="statusBadge(p)"></span>\
             <button class="btn ghost sm" @click.stop="editProduct = p; showForm = true">แก้ไข</button>\
           </div>\
         </div>\

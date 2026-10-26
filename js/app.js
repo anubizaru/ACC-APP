@@ -183,7 +183,7 @@
     return p[2] + '/' + p[1] + '/' + p[0]
   }
   function fmtMoney(n) { return fmtBaht(n) }
-  var TYPE_LABEL = { new: 'รับสินค้าใหม่', interest: 'รับดอกเบี้ย', redeem: 'ไถ่ถอน', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า' }
+  var TYPE_LABEL = { new: 'รับสินค้าใหม่', interest: 'รับค่าบริการ', redeem: 'ไถ่ถอน', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า' }
   function typeLabel(t) { return TYPE_LABEL[t] || t }
   function dueLabel(due) {
     var list = store.data ? store.data.due : []
@@ -283,7 +283,7 @@
           <div class="hero">\
             <div class="big-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>\
             <h1>ระบบบัญชีร้านรับจำนำ</h1>\
-            <p>จัดการสินค้า ดอกเบี้ย บัญชีร้าน เจ้าหนี้ และรายงาน — ข้อมูลอยู่บน Google Sheets ของคุณ</p>\
+            <p>จัดการสินค้า ค่าบริการ บัญชีร้าน เจ้าหนี้ และรายงาน — ข้อมูลอยู่บน Google Sheets ของคุณ</p>\
           </div>\
           <div class="card">\
             <button class="btn block" @click="demo" data-testid="button-demo">เริ่มทดลองใช้งาน (ข้อมูลตัวอย่าง)</button>\
@@ -550,7 +550,7 @@
           var price = Number(this.form.price)
           if (!price || price <= 0 || !Number.isInteger(price)) e.price = 'ราคาต้องเป็นจำนวนเต็มบาท มากกว่า 0'
           var it = Number(this.form.interest)
-          if (isNaN(it) || it < 0 || !Number.isInteger(it)) e.interest = 'ดอกเบี้ยต้องเป็นจำนวนเต็มบาท (0 ได้)'
+          if (isNaN(it) || it < 0 || !Number.isInteger(it)) e.interest = 'ค่าบริการต้องเป็นจำนวนเต็มบาท (0 ได้)'
         }
         this.errs = e
         return Object.keys(e).length === 0
@@ -605,7 +605,7 @@
                 <input id="pf-price" class="input" type="number" min="1" step="1" :class="{invalid: errs.price}" v-model.number="form.price" data-testid="input-price" />\
                 <span v-if="errs.price" class="err">{{ errs.price }}</span>\
               </div>\
-              <div class="field"><label for="pf-int">ดอกเบี้ยต่องวด (บาท) *</label>\
+              <div class="field"><label for="pf-int">ค่าบริการต่องวด (บาท) *</label>\
                 <input id="pf-int" class="input" type="number" min="0" step="1" :class="{invalid: errs.interest}" v-model.number="form.interest" data-testid="input-interest" />\
                 <span v-if="interestSuggest" class="hint">แนะนำ: {{ interestSuggest }}</span>\
                 <span v-if="errs.interest" class="err">{{ errs.interest }}</span>\
@@ -717,7 +717,7 @@
             <div class="grow">\
               <div class="title">{{ p.customerName }}</div>\
               <div class="sub">{{ p.detail }} · {{ dueLabel(p.due) }} · ครบกำหนด {{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}</div>\
-              <div class="sub">ต้น {{ fmtMoney(p.price) }} ฿ · ดอก {{ fmtMoney(p.interest) }} ฿ · รับ {{ fmtDate(p.startDate) }}</div>\
+              <div class="sub">ต้น {{ fmtMoney(p.price) }} ฿ · ค่าบริการ {{ fmtMoney(p.interest) }} ฿ · รับ {{ fmtDate(p.startDate) }}</div>\
             </div>\
             <span v-html="statusBadge(p)"></span>\
             <button class="btn ghost sm" @click.stop="editProduct = p; showForm = true">แก้ไข</button>\
@@ -748,7 +748,7 @@
     },
     computed: {
       titleMap: function () {
-        return { interest: 'รับดอกเบี้ย', redeem: 'ไถ่ถอน (คืนสินค้า)', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า' }
+        return { interest: 'รับค่าบริการ', redeem: 'ไถ่ถอน (คืนสินค้า)', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า' }
       },
       title: function () { return this.titleMap[this.op] || this.op },
       canSubmit: function () {
@@ -819,10 +819,10 @@
           <div class="confirm-box">\
             <div class="row"><span class="lbl">ลูกค้า / สินค้า</span><span class="val">{{ product.customerName }} · {{ product.detail }}</span></div>\
             <div class="row"><span class="lbl">เงินต้นปัจจุบัน</span><span class="val">{{ fmtMoney(product.price) }} ฿</span></div>\
-            <div class="row"><span class="lbl">ดอกเบี้ยต่องวด</span><span class="val">{{ fmtMoney(product.interest) }} ฿</span></div>\
+            <div class="row"><span class="lbl">ค่าบริการต่องวด</span><span class="val">{{ fmtMoney(product.interest) }} ฿</span></div>\
             <div class="row"><span class="lbl">วันครบกำหนดปัจจุบัน</span><span class="val">{{ product.endDate && product.endDate !== \'0\' ? fmtDate(product.endDate) : \'—\' }}</span></div>\
           </div>\
-          <div class="field"><label for="fin-amount">{{ op === \'interest\' ? \'ดอกเบี้ยที่รับ (บาท)\' : op === \'redeem\' ? \'ดอกเบี้ยค้างชำระรวมงวดนี้ (บาท)\' : op === \'sale\' ? \'ราคาที่ขายได้ (บาท)\' : \'จำนวนเงิน (บาท)\' }}</label>\
+          <div class="field"><label for="fin-amount">{{ op === \'interest\' ? \'ค่าบริการที่รับ (บาท)\' : op === \'redeem\' ? \'ค่าบริการค้างชำระรวมงวดนี้ (บาท)\' : op === \'sale\' ? \'ราคาที่ขายได้ (บาท)\' : \'จำนวนเงิน (บาท)\' }}</label>\
             <input id="fin-amount" class="input" type="number" min="0" step="1" v-model.number="amount" data-testid="input-amount" />\
           </div>\
           <div class="field"><label for="fin-note">หมายเหตุ</label><input id="fin-note" class="input" v-model="note" /></div>\
@@ -830,7 +830,7 @@
             <div class="row"><span class="lbl">เงินรับเข้า</span><span class="val pos">{{ fmtMoney(preview.cashIn) }} ฿</span></div>\
             <div class="row"><span class="lbl">เงินจ่ายออก</span><span class="val neg">{{ fmtMoney(preview.cashOut) }} ฿</span></div>\
             <div class="row" v-if="op === \'increase\' || op === \'reduce\'"><span class="lbl">เงินต้นหลังทำรายการ</span><span class="val">{{ fmtMoney(preview.priceAfter) }} ฿</span></div>\
-            <div class="row" v-if="op === \'increase\' || op === \'reduce\'"><span class="lbl">ดอกเบี้ยใหม่ต่องวด</span><span class="val">{{ fmtMoney(preview.interestAfter) }} ฿</span></div>\
+            <div class="row" v-if="op === \'increase\' || op === \'reduce\'"><span class="lbl">ค่าบริการใหม่ต่องวด</span><span class="val">{{ fmtMoney(preview.interestAfter) }} ฿</span></div>\
             <div class="row" v-if="op === \'interest\' || op === \'increase\'"><span class="lbl">วันครบกำหนดใหม่</span><span class="val">{{ preview.endDateAfter && preview.endDateAfter !== \'0\' ? fmtDate(preview.endDateAfter) : \'—\' }}</span></div>\
             <div class="row" v-if="op === \'redeem\' || op === \'sale\'"><span class="lbl">สถานะหลังทำรายการ</span><span class="val">{{ preview.closeAfter }}</span></div>\
           </div>\
@@ -917,7 +917,7 @@
             <div><div class="muted" style="font-size:var(--text-xs)">รายละเอียด</div><b>{{ p.detail }}</b></div>\
             <div><div class="muted" style="font-size:var(--text-xs)">หมายเหตุ</div>{{ p.desc || \'—\' }}</div>\
             <div><div class="muted" style="font-size:var(--text-xs)">เงินต้น</div><b>{{ fmtMoney(p.price) }} ฿</b></div>\
-            <div><div class="muted" style="font-size:var(--text-xs)">ดอกเบี้ยต่องวด</div><b>{{ fmtMoney(p.interest) }} ฿</b></div>\
+            <div><div class="muted" style="font-size:var(--text-xs)">ค่าบริการต่องวด</div><b>{{ fmtMoney(p.interest) }} ฿</b></div>\
             <div><div class="muted" style="font-size:var(--text-xs)">วันที่รับ</div>{{ fmtDate(p.startDate) }}</div>\
             <div><div class="muted" style="font-size:var(--text-xs)">วันครบกำหนด</div>{{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}<div v-if="dueCountdown(p)" style="margin-top:4px"><span :class="isOverdue(p) ? \'badge pink\' : \'muted\'" style="font-size:var(--text-xs)">{{ dueCountdown(p) }}</span></div></div>\
           </div>\
@@ -925,7 +925,7 @@
         <div v-if="active()" class="card">\
           <div class="card-title">ทำรายการ</div>\
           <div class="grid grid-3">\
-            <button class="btn gold" @click="op=\'interest\'" data-testid="button-op-interest">รับดอกเบี้ย</button>\
+            <button class="btn gold" @click="op=\'interest\'" data-testid="button-op-interest">รับค่าบริการ</button>\
             <button class="btn" @click="op=\'redeem\'" data-testid="button-op-redeem">ไถ่ถอน</button>\
             <button class="btn outline" @click="op=\'increase\'" data-testid="button-op-increase">เพิ่มต้น</button>\
             <button class="btn outline" @click="op=\'reduce\'" data-testid="button-op-reduce">ลดต้น</button>\
@@ -1279,7 +1279,7 @@
           <div class="grid grid-3">\
             <div class="card stat in"><div class="stat-label">รับเข้ารวม (สินค้า)</div><div class="stat-value">{{ fmtMoney(result.summary.cashIn) }} ฿</div></div>\
             <div class="card stat out"><div class="stat-label">จ่ายออกรวม (สินค้า)</div><div class="stat-value">{{ fmtMoney(result.summary.cashOut) }} ฿</div></div>\
-            <div class="card stat profit"><div class="stat-label">กำไร/ดอกเบี้ย</div><div class="stat-value">{{ fmtMoney(result.summary.profit) }} ฿</div></div>\
+            <div class="card stat profit"><div class="stat-label">กำไร/ค่าบริการ</div><div class="stat-value">{{ fmtMoney(result.summary.profit) }} ฿</div></div>\
           </div>\
           <div class="card mt-4">\
             <div class="card-title">กราฟรายรับ-จ่ายรายวัน (รวมบัญชีร้าน)</div>\

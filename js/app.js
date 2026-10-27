@@ -8,8 +8,30 @@
   var reactive = Vue.reactive
   var ref = Vue.ref
   var computed = Vue.computed
-  var onMounted = Vue.onMounted
-  var onUnmounted = Vue.onUnmounted
+
+  var chartLoadPromise = null
+  function loadChartJs() {
+    if (window.Chart) return Promise.resolve(window.Chart)
+    if (!chartLoadPromise) {
+      chartLoadPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement('script')
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js'
+        script.onload = function () {
+          if (window.Chart) resolve(window.Chart)
+          else {
+            chartLoadPromise = null
+            reject(new Error('chart-not-available'))
+          }
+        }
+        script.onerror = function () {
+          chartLoadPromise = null
+          reject(new Error('chart-load-failed'))
+        }
+        document.head.appendChild(script)
+      })
+    }
+    return chartLoadPromise
+  }
 
   /* ---------- store กลาง ---------- */
 
@@ -185,6 +207,79 @@
   function fmtMoney(n) { return fmtBaht(n) }
   var TYPE_LABEL = { new: 'รับสินค้าใหม่', interest: 'รับค่าบริการ', redeem: 'ไถ่ถอน', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า' }
   function typeLabel(t) { return TYPE_LABEL[t] || t }
+  function customerRiskIndex(products, statements) {
+    var productsByCustomer = Object.create(null)
+    var statementsByProduct = Object.create(null)
+    products.forEach(function (product) {
+      var name = String(product.customerName || '').trim().toLowerCase()
+      if (!name) return
+      if (!productsByCustomer[name]) productsByCustomer[name] = []
+      productsByCustomer[name].push(product)
+    })
+    statements.forEach(function (statement) {
+      if (String(statement.void).toLowerCase() === 'true' || statement.voidOf) return
+      if (!statementsByProduct[statement.productId]) statementsByProduct[statement.productId] = []
+      statementsByProduct[statement.productId].push(statement)
+    })
+
+    var index = Object.create(null)
+    Object.keys(productsByCustomer).forEach(function (name) {
+      var customerProducts = productsByCustomer[name]
+      var counts = { renewed: 0, redeemed: 0, overdue: 0, other: 0 }
+      customerProducts.forEach(function (product) {
+        var productStatements = statementsByProduct[product.id] || []
+        productStatements.sort(function (a, b) {
+          return String(a.date || '').localeCompare(String(b.date || '')) ||
+            String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+        })
+        var hasRenewed = false
+        var wasOverdue = false
+        var previousEndDate = ''
+        productStatements.forEach(function (statement) {
+          if (statement.type === 'interest') {
+            hasRenewed = true
+            if (previousEndDate && String(statement.date || '').slice(0, 10) > String(previousEndDate).slice(0, 10)) {
+              wasOverdue = true
+            }
+          }
+          if (statement.endDateAfter && statement.endDateAfter !== '0') previousEndDate = statement.endDateAfter
+        })
+
+        if (Number(product.status) === 0 && product.closeStatus === 'redeem') {
+          counts.redeemed++
+        } else if (wasOverdue || (Number(product.status) === 1 && Number(product.due) > 0 && daysLeft(product.endDate) < 0)) {
+          counts.overdue++
+        } else if (hasRenewed) {
+          counts.renewed++
+        } else {
+          counts.other++
+        }
+      })
+
+      var groups = [
+        { key: 'renewed', label: 'ต่อดอก', color: '#2e7d4f' },
+        { key: 'redeemed', label: 'ไถ่ถอน', color: '#2a5f8a' },
+        { key: 'overdue', label: 'เกินกำหนด', color: '#a63a3a' },
+        { key: 'other', label: 'อื่น ๆ', color: '#a9a493' }
+      ]
+      var offset = 0
+      var stops = []
+      groups.forEach(function (group) {
+        var end = offset + counts[group.key] / customerProducts.length * 100
+        if (end > offset) stops.push(group.color + ' ' + offset + '% ' + end + '%')
+        offset = end
+        group.count = counts[group.key]
+        group.percent = Math.round(counts[group.key] / customerProducts.length * 100)
+      })
+      index[name] = {
+        total: customerProducts.length,
+        groups: groups,
+        chartStyle: { background: 'conic-gradient(' + stops.join(', ') + ')' }
+      }
+    })
+    return index
+  }
+
   function dueLabel(due) {
     var list = store.data ? store.data.due : []
     for (var i = 0; i < list.length; i++) if (Number(list[i].due) === Number(due)) return list[i].title
@@ -539,6 +634,11 @@
           return dateOrder || Number(b.productNo) - Number(a.productNo)
         })
       },
+      customerRisk: function () {
+        var name = this.form.customerName.trim().toLowerCase()
+        if (this.isEdit || !name || !store.data) return null
+        return customerRiskIndex(store.data.products, store.data.statements)[name] || null
+      },
       endPreview: function () {
         if (this.form.due == 0) return '—'
         return fmtDate(calEndDate(Number(this.form.due), this.form.startDate))
@@ -624,7 +724,18 @@
             <span v-if="errs.productNo" class="err">{{ errs.productNo }}</span>\
           </div>\
           <div class="field"><label for="pf-name">ชื่อลูกค้า *</label>\
-            <input id="pf-name" class="input" :class="{invalid: errs.customerName}" v-model="form.customerName" data-testid="input-customer" />\
+            <div class="customer-name-row">\
+              <input id="pf-name" class="input" :class="{invalid: errs.customerName}" v-model="form.customerName" data-testid="input-customer" />\
+              <div v-if="customerRisk" class="customer-risk" data-testid="customer-history-risk" :aria-label="\'สัดส่วนประวัติลูกค้า \' + customerRisk.total + \' รายการ\'">\
+                <div class="customer-risk-chart" :style="customerRisk.chartStyle" role="img" :aria-label="\'สัดส่วนประวัติจาก \' + customerRisk.total + \' รายการ\'"><span>{{ customerRisk.total }}</span></div>\
+                <div class="customer-risk-legend">\
+                  <span v-for="group in customerRisk.groups" :key="group.key" class="customer-risk-item">\
+                    <i :style="{background: group.color}"></i>{{ group.label }} {{ group.percent }}%\
+                  </span>\
+                </div>\
+              </div>\
+            </div>\
+            <span v-if="customerRisk" class="customer-risk-note">สถิติย้อนหลัง {{ customerRisk.total }} รายการ ไม่ใช่การทำนายแน่นอน</span>\
             <span v-if="errs.customerName" class="err">{{ errs.customerName }}</span>\
             <div v-if="customerHistory.length || (form.customerName.trim() && !isEdit && form.customerName.trim() !== historySelectedName)" class="customer-history" aria-label="ประวัติรายการของลูกค้า">\
               <div class="customer-history-title">ประวัติรายการ ({{ customerHistory.length }})</div>\
@@ -733,6 +844,10 @@
       return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null }
     },
     computed: {
+      customerRisks: function () {
+        if (!store.data) return Object.create(null)
+        return customerRiskIndex(store.data.products, store.data.statements)
+      },
       list: function () {
         if (!store.data) return []
         var self = this
@@ -766,6 +881,10 @@
     },
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge,
+      customerRiskFor: function (product) {
+        var name = String(product.customerName || '').trim().toLowerCase()
+        return this.customerRisks[name] || null
+      },
       statementsFor: function (product) {
         if (!store.data) return []
         return store.data.statements.filter(function (statement) { return statement.productId === product.id })
@@ -808,15 +927,23 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>\
             ไม่พบสินค้า\
           </div>\
-          <div v-for="p in list" :key="p.id" class="list-row clickable" @click="$go(\'product/\' + p.id)" :data-testid="\'card-product-\' + p.id">\
+          <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="$go(\'product/\' + p.id)" :data-testid="\'card-product-\' + p.id">\
             <div class="prod-no">{{ p.productNo }}</div>\
             <div class="grow">\
               <div class="title">{{ p.customerName }}</div>\
               <div class="sub">{{ p.detail }} · {{ dueLabel(p.due) }} · ครบกำหนด {{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}</div>\
               <div class="sub">ต้น {{ fmtMoney(p.price) }} ฿ · ค่าบริการ {{ fmtMoney(p.interest) }} ฿ · รับ {{ fmtDate(p.startDate) }}</div>\
             </div>\
-            <span v-html="statusBadge(p)"></span>\
-            <button class="btn ghost sm" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-record-details-\' + p.id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>\
+            <div v-if="customerRiskFor(p)" class="product-customer-risk" :data-testid="\'customer-risk-product-\' + p.id" :aria-label="\'สัดส่วนประวัติลูกค้า \' + customerRiskFor(p).total + \' รายการ\'">\
+              <div class="customer-risk-chart product-customer-risk-chart" :style="customerRiskFor(p).chartStyle" role="img" :aria-label="\'สัดส่วนประวัติจาก \' + customerRiskFor(p).total + \' รายการ\'"><span>{{ customerRiskFor(p).total }}</span></div>\
+              <div class="customer-risk-legend">\
+                <span v-for="group in customerRiskFor(p).groups" :key="group.key" class="customer-risk-item">\
+                  <i :style="{background: group.color}"></i>{{ group.label }} {{ group.percent }}%\
+                </span>\
+              </div>\
+            </div>\
+            <span class="product-status" v-html="statusBadge(p)"></span>\
+            <button class="btn ghost sm product-record-action" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-record-details-\' + p.id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>\
           </div>\
         </div>\
         <ProductForm v-if="showForm" :product="editProduct" @close="showForm = false" @saved="editProduct = null" />\
@@ -1326,10 +1453,17 @@
           snack('ดึงรายงานไม่สำเร็จ', true)
         }
       },
-      drawChart: function () {
-        var self = this
+      drawChart: async function () {
         var el = this.$refs.canvas
         if (!el || !this.result) return
+        var ChartLib
+        try {
+          ChartLib = await loadChartJs()
+        } catch (err) {
+          snack('โหลดกราฟไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', true)
+          return
+        }
+        if (!el.isConnected || this.$refs.canvas !== el) return
         if (this.chart) this.chart.destroy()
         // รวมรายรับ/จ่ายต่อวัน (สินค้า + บัญชีร้าน)
         var byDay = {}
@@ -1347,7 +1481,7 @@
         var days = Object.keys(byDay).sort()
         var inData = days.map(function (d) { return byDay[d].in })
         var outData = days.map(function (d) { return -byDay[d].out })
-        this.chart = new Chart(el, {
+        this.chart = new ChartLib(el, {
           type: 'bar',
           data: {
             labels: days.map(function (d) { return d.slice(8) + '/' + d.slice(5, 7) }),
@@ -1382,7 +1516,13 @@
         URL.revokeObjectURL(a.href)
       }
     },
-    onMounted: function () { this.run() },
+    mounted: function () { this.run() },
+    beforeUnmount: function () {
+      if (this.chart) {
+        this.chart.destroy()
+        this.chart = null
+      }
+    },
     template: '\
       <div>\
         <h2 class="page-title">รายงาน</h2>\

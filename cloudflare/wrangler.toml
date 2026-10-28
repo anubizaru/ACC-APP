@@ -1,0 +1,8 @@
+name = "pawnshop-api"
+main = "worker.js"
+compatibility_date = "2026-10-28"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pawnshop"
+database_id = "f1b34154-3da7-40b5-bc84-21e4133c62cb"

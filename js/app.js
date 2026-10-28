@@ -38,6 +38,7 @@
   var store = reactive({
     api: null,          // instance ของ PawnAPI
     mode: null,         // 'demo' | 'real'
+    backendProvider: null,
     connectUrl: '',
     token: null,
     user: null,
@@ -117,13 +118,14 @@
   function startDemo() {
     store.mode = 'demo'
     store.api = PawnAPI.demo()
+    store.backendProvider = null
     store.connectUrl = ''
     store.user = null
     store.token = null
     store.data = null
   }
 
-  async function startReal(url) {
+  async function startReal(url, provider) {
     var api = PawnAPI.real(url)
     var res = await api.call('ping')
     if (!res || res.ok !== true) throw new Error('ping-fail')
@@ -134,8 +136,10 @@
     }
     store.mode = 'real'
     store.api = api
+    store.backendProvider = provider || 'apps-script'
     store.connectUrl = url
     lsSet('pawn_url', url)
+    lsSet('pawn_provider', store.backendProvider)
     store.user = null
     store.token = null
     store.data = null
@@ -144,10 +148,12 @@
   function disconnect() {
     store.api = null
     store.mode = null
+    store.backendProvider = null
     store.user = null
     store.token = null
     store.data = null
     lsDel('pawn_url')
+    lsDel('pawn_provider')
     lsDel('pawn_token')
     location.hash = ''
   }
@@ -343,31 +349,46 @@
 
   var Welcome = {
     data: function () {
-      return { store: store, url: lsGet('pawn_url') || '', testing: false, testMsg: '' }
+      return { store: store, url: lsGet('pawn_url') || '', provider: lsGet('pawn_provider') || 'apps-script', testing: false, testMsg: '' }
     },
     methods: {
       demo: function () { startDemo() },
       goGuide: function () { startDemo(); location.hash = '#/guide' },
+      isCloudflare: function () { return this.provider === 'cloudflare' },
+      urlLabel: function () { return this.isCloudflare() ? 'URL ของ Cloudflare Worker' : 'ลิงก์ Web App (จาก Apps Script)' },
+      urlPlaceholder: function () { return this.isCloudflare() ? 'https://your-worker.workers.dev' : 'https://script.google.com/macros/s/.../exec' },
       connect: async function () {
-        var self = this
         var u = this.url.trim()
-        if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(u)) {
-          this.testMsg = 'ลิงก์ต้องขึ้นต้นด้วย https://script.google.com/macros/s/ และลงท้ายด้วย /exec'
+        var validUrl = false
+        try {
+          var parsed = new URL(u)
+          validUrl = parsed.protocol === 'https:' && !!parsed.hostname
+        } catch (e) {}
+        if (!validUrl || (this.provider === 'apps-script' && !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(u))) {
+          this.testMsg = this.provider === 'cloudflare'
+            ? 'กรุณากรอก URL แบบ HTTPS ของ Cloudflare Worker'
+            : 'ลิงก์ต้องขึ้นต้นด้วย https://script.google.com/macros/s/ และลงท้ายด้วย /exec'
           return
         }
         this.testing = true
         this.testMsg = ''
         try {
-          await startReal(u)
+          await startReal(u, this.provider)
           this.testMsg = ''
           snack('เชื่อมต่อสำเร็จ กรุณาเข้าสู่ระบบ')
         } catch (e) {
           var em = e && e.message
           this.testMsg = em === 'not-setup'
-            ? 'เชื่อมต่อได้ แต่ยังไม่ได้รัน setup — เปิด Apps Script แล้วรันฟังก์ชัน setup ก่อน (คู่มือขั้นที่ 4)'
+            ? this.provider === 'cloudflare'
+              ? 'เชื่อมต่อ Worker ได้แล้ว แต่ยังไม่ได้ตั้งค่าผู้ดูแลระบบ ดูขั้นตอนใน cloudflare/README.md'
+              : 'เชื่อมต่อได้ แต่ยังไม่ได้รัน setup — เปิด Apps Script แล้วรันฟังก์ชัน setup ก่อน (คู่มือขั้นที่ 4)'
             : em === 'setup-check-failed'
-              ? 'ตรวจสอบสถานะระบบไม่สำเร็จ — ตรวจว่าวางโค้ดเวอร์ชันล่าสุดและรัน setup แล้ว'
-              : 'ติดต่อไม่ได้ — ตรวจว่า deploy แบบ Web app (Anyone) และรัน setup แล้ว'
+            ? this.provider === 'cloudflare'
+              ? 'ตรวจสอบสถานะ D1 ไม่สำเร็จ — ตรวจ schema และการตั้งค่า Worker'
+              : 'ตรวจสอบสถานะระบบไม่สำเร็จ — ตรวจว่าวางโค้ดเวอร์ชันล่าสุดและรัน setup แล้ว'
+              : this.provider === 'cloudflare'
+                ? 'ติดต่อ Worker ไม่ได้ — ตรวจ URL, การ deploy และการตั้งค่า D1'
+                : 'ติดต่อไม่ได้ — ตรวจว่า deploy แบบ Web app (Anyone) และรัน setup แล้ว'
         }
         this.testing = false
       }
@@ -378,17 +399,24 @@
           <div class="hero">\
             <div class="big-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>\
             <h1>ระบบบัญชีร้านรับจำนำ</h1>\
-            <p>จัดการสินค้า ค่าบริการ บัญชีร้าน เจ้าหนี้ และรายงาน — ข้อมูลอยู่บน Google Sheets ของคุณ</p>\
+            <p>จัดการสินค้า ค่าบริการ บัญชีร้าน เจ้าหนี้ และรายงาน — เชื่อมต่อ Google Sheets หรือ Cloudflare D1</p>\
           </div>\
           <div class="card">\
             <button class="btn block" @click="demo" data-testid="button-demo">เริ่มทดลองใช้งาน (ข้อมูลตัวอย่าง)</button>\
             <p class="muted mt-4" style="font-size:var(--text-xs);text-align:center">โหมดทดลองใช้งานได้ทันที ไม่ต้องตั้งค่า</p>\
           </div>\
           <div class="card mt-4">\
-            <div class="card-title">เชื่อมต่อ Google Sheets ของคุณ</div>\
-            <div class="field"><label for="inp-url">ลิงก์ Web App (จาก Apps Script)</label>\
-              <input id="inp-url" class="input" v-model="url" placeholder="https://script.google.com/macros/s/.../exec" />\
+            <div class="card-title">เชื่อมต่อฐานข้อมูล</div>\
+            <div class="field"><label for="inp-provider">ผู้ให้บริการฐานข้อมูล</label>\
+              <select id="inp-provider" class="input" v-model="provider">\
+                <option value="apps-script">Google Sheets (Apps Script)</option>\
+                <option value="cloudflare">Cloudflare D1 (Worker)</option>\
+              </select>\
             </div>\
+            <div class="field"><label for="inp-url">{{ urlLabel() }}</label>\
+              <input id="inp-url" class="input" v-model="url" :placeholder="urlPlaceholder()" />\
+            </div>\
+            <p v-if="isCloudflare()" class="muted mt-4" style="font-size:var(--text-xs)">ต้องตั้งค่า Worker, D1 และผู้ดูแลระบบก่อนเชื่อมต่อ ดูขั้นตอนได้ใน cloudflare/README.md</p>\
             <p v-if="testMsg" class="err" style="font-size:var(--text-xs);color:var(--color-danger);margin-bottom:12px">{{ testMsg }}</p>\
             <button class="btn gold block" @click="connect" :disabled="testing || !url" data-testid="button-connect">{{ testing ? "กำลังตรวจสอบ..." : "เชื่อมต่อ" }}</button>\
             <p class="muted mt-4" style="font-size:var(--text-xs)">ยังไม่มีลิงก์? <button class="linklike" @click="goGuide" style="color:var(--color-gold)">ดูคู่มือตั้งค่า</button> (เปิดในโหมดทดลองก่อนได้)</p>\
@@ -456,7 +484,7 @@
         <aside class="sidebar">\
           <div class="brand">\
             <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>\
-            <div><div class="brand-name">ร้านรับจำนำ</div><div class="brand-sub">{{ store.mode === "demo" ? "โหมดทดลอง" : "Google Sheets" }}</div></div>\
+            <div><div class="brand-name">ร้านรับจำนำ</div><div class="brand-sub">{{ store.mode === "demo" ? "โหมดทดลอง" : (store.backendProvider === "cloudflare" ? "Cloudflare D1" : "Google Sheets") }}</div></div>\
           </div>\
           <nav>\
             <a href="#/dashboard" :class="{active: view===\'dashboard\'}">🏠 หน้าหลัก</a>\
@@ -1791,7 +1819,7 @@
       // ถ้าเคยบันทึก URL ไว้ พยายามกลับมาใช้โหมดจริง
       var savedUrl = lsGet('pawn_url')
       if (savedUrl) {
-        try { await startReal(savedUrl) } catch (e) { /* ลิงก์ใช้ไม่ได้แล้ว เริ่มใหม่ */ }
+        try { await startReal(savedUrl, lsGet('pawn_provider') || 'apps-script') } catch (e) { /* ลิงก์ใช้ไม่ได้แล้ว เริ่มใหม่ */ }
       }
       this.booting = false
     },

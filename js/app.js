@@ -331,6 +331,26 @@
     data: function () { return { store: store } }
   }
 
+  var FlatIcon = {
+    props: { name: { type: String, required: true } },
+    template: '\
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">\
+        <path v-if="name===\'brand\'" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Zm3 1v2h10v-2H7Zm0 4v1.5h10v-1.5H7Zm0 3.5v1.5h6V14H7Z"/>\
+        <path v-else-if="name===\'home\'" d="m2.8 10.3 8.3-7a1.4 1.4 0 0 1 1.8 0l8.3 7a1.4 1.4 0 0 1-1.8 2.1l-.9-.8v8.1h-5.2v-5.4h-3v5.4H5.1v-8.1l-.5.4a1.4 1.4 0 1 1-1.8-2.1Z"/>\
+        <path v-else-if="name===\'box\'" d="m12 2.2 9.2 4.7v10.2L12 21.8l-9.2-4.7V6.9L12 2.2Zm0 2.6L6 7.9l6 3.1 6-3.1-6-3.1Zm-7 5.3v5.5l5.8 3v-5.5l-5.8-3Zm8.2 8.5 5.8-3v-5.5l-5.8 3v5.5Z"/>\
+        <path v-else-if="name===\'wallet\'" d="M4 4h15a2 2 0 0 1 2 2v1h-4a4 4 0 0 0 0 8h4v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm13 5h5v5h-5a2.5 2.5 0 0 1 0-5Zm0 1.7a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6ZM4 2h13v1.5H4A2.5 2.5 0 0 0 1.5 6V7H0V6a4 4 0 0 1 4-4Z"/>\
+        <path v-else-if="name===\'users\'" d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7.2-.5a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM9 13c-4.1 0-7 2-7 4.5V21h14v-3.5C16 15 13.1 13 9 13Zm7.2-.3c-.7 0-1.3.1-1.9.2 1.7 1 2.7 2.5 2.7 4.3V21h5v-3.1c0-2.9-2.5-5.2-5.8-5.2Z"/>\
+        <path v-else-if="name===\'chart\'" d="M3 3h2v17h17v2H3V3Zm4 11 4-4 3 2 5-6 1.6 1.3-6.2 7.5-3.1-2.1-2.9 2.9L7 14Zm11-8h4v4h-2V9.4l-2-1.6V6Z"/>\
+        <path v-else-if="name===\'settings\'" d="m19.4 13.5 1.5 1.2-1.8 3.1-1.8-.7a7.8 7.8 0 0 1-1.8 1l-.3 1.9h-3.6l-.3-1.9a7.8 7.8 0 0 1-1.8-1l-1.8.7-1.8-3.1 1.5-1.2a7 7 0 0 1 0-2.1l-1.5-1.2 1.8-3.1 1.8.7a7.8 7.8 0 0 1 1.8-1l.3-1.9h3.6l.3 1.9a7.8 7.8 0 0 1 1.8 1l1.8-.7 1.8 3.1-1.5 1.2a7 7 0 0 1 0 2.1ZM13.4 9a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>\
+        <path v-else-if="name===\'book\'" d="M4 3h15a2 2 0 0 1 2 2v15H6a3 3 0 0 1-3-3V5a2 2 0 0 1 1-2Zm2 2v12a3 3 0 0 1 1-.2h12V5H6Zm2 3h9v1.7H8V8Zm0 3h9v1.7H8V11Z"/>\
+        <path v-else-if="name===\'help\'" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 17.8a7.8 7.8 0 1 1 0-15.6 7.8 7.8 0 0 1 0 15.6Zm-.1-13.2c-2.1 0-3.5 1.2-3.7 3.1h2.2c.1-.8.6-1.2 1.5-1.2.8 0 1.3.4 1.3 1.1 0 .6-.3.9-1.2 1.5-1.3.8-1.9 1.6-1.9 3.1v.4h2.2v-.3c0-.9.3-1.3 1.4-2 1.2-.8 1.8-1.6 1.8-2.9 0-1.7-1.4-2.8-3.6-2.8Zm-1.1 9.1v2.2h2.4v-2.2h-2.4Z"/>\
+        <path v-else-if="name===\'logout\'" d="M10 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-9v-2h9V5h-9V3ZM3 11h10l-3.5-3.5L11 7l5 5-5 5-1.5-1.5L13 13H3v-2Z"/>\
+        <path v-else-if="name===\'eye\'" d="M12 5c-5.2 0-9.2 4.2-10.7 6.2a1.3 1.3 0 0 0 0 1.6C2.8 14.8 6.8 19 12 19s9.2-4.2 10.7-6.2a1.3 1.3 0 0 0 0-1.6C21.2 9.2 17.2 5 12 5Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>\
+        <path v-else-if="name===\'close\'" d="m5.4 4 6.6 6.6L18.6 4 20 5.4 13.4 12l6.6 6.6-1.4 1.4-6.6-6.6L5.4 20 4 18.6 10.6 12 4 5.4 5.4 4Z"/>\
+        <path v-else d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2c0-3 3-2.8 3-5a2 2 0 0 0-4 0H8a4 4 0 0 1 8 0c0 3-3 3-3 5Z"/>\
+      </svg>'
+  }
+
   var Modal = {
     props: ['title'],
     emits: ['close'],
@@ -338,7 +358,7 @@
       <div class="modal-mask" @click.self="$emit(\'close\')" role="dialog" :aria-label="title">\
         <div class="modal">\
           <div class="modal-header"><h3>{{ title }}</h3>\
-            <button class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด">✕</button>\
+            <button class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด"><FlatIcon name="close" /></button>\
           </div>\
           <div class="modal-body"><slot></slot></div>\
         </div>\
@@ -397,7 +417,7 @@
       <div class="auth-wrap">\
         <div class="auth-card">\
           <div class="hero">\
-            <div class="big-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>\
+            <div class="big-mark"><FlatIcon name="brand" /></div>\
             <h1>ระบบบัญชีร้านรับจำนำ</h1>\
             <p>จัดการสินค้า ค่าบริการ บัญชีร้าน เจ้าหนี้ และรายงาน — เชื่อมต่อ Google Sheets หรือ Cloudflare D1</p>\
           </div>\
@@ -446,7 +466,7 @@
       <div class="auth-wrap">\
         <div class="auth-card">\
           <div class="auth-logo">\
-            <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>\
+            <div class="mark"><FlatIcon name="brand" /></div>\
             <div class="name">ระบบบัญชีร้านรับจำนำ</div>\
           </div>\
           <div class="card">\
@@ -483,17 +503,17 @@
       <div>\
         <aside class="sidebar">\
           <div class="brand">\
-            <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>\
+            <div class="brand-mark"><FlatIcon name="brand" /></div>\
             <div><div class="brand-name">ร้านรับจำนำ</div><div class="brand-sub">{{ store.mode === "demo" ? "โหมดทดลอง" : (store.backendProvider === "cloudflare" ? "Cloudflare D1" : "Google Sheets") }}</div></div>\
           </div>\
           <nav>\
-            <a href="#/dashboard" :class="{active: view===\'dashboard\'}">🏠 หน้าหลัก</a>\
-            <a href="#/products" :class="{active: view===\'products\'}">📦 สินค้า</a>\
-            <a href="#/accounting" :class="{active: view===\'accounting\'}">💰 บัญชีร้าน</a>\
-            <a href="#/creditors" :class="{active: view===\'creditors\'}">🤝 เจ้าหนี้</a>\
-            <a href="#/reports" :class="{active: view===\'reports\'}">📊 รายงาน</a>\
-            <a href="#/settings" :class="{active: view===\'settings\'}">⚙️ ตั้งค่า</a>\
-            <a href="#/guide">📖 คู่มือเชื่อมต่อ</a>\
+            <a href="#/dashboard" :class="{active: view===\'dashboard\'}"><FlatIcon name="home" />หน้าหลัก</a>\
+            <a href="#/products" :class="{active: view===\'products\'}"><FlatIcon name="box" />สินค้า</a>\
+            <a href="#/accounting" :class="{active: view===\'accounting\'}"><FlatIcon name="wallet" />บัญชีร้าน</a>\
+            <a href="#/creditors" :class="{active: view===\'creditors\'}"><FlatIcon name="users" />เจ้าหนี้</a>\
+            <a href="#/reports" :class="{active: view===\'reports\'}"><FlatIcon name="chart" />รายงาน</a>\
+            <a href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" />ตั้งค่า</a>\
+            <a href="#/guide"><FlatIcon name="book" />คู่มือเชื่อมต่อ</a>\
           </nav>\
           <div class="side-foot">\
             <div>{{ store.user ? store.user.name : "" }}</div>\
@@ -504,17 +524,17 @@
           <div class="tb-title">ร้านรับจำนำ</div>\
           <div class="tb-actions">\
             <span class="tb-user">{{ store.user ? store.user.name : "" }}</span>\
-            <a class="icon-btn" href="#/guide" aria-label="คู่มือ" title="คู่มือ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></a>\
-            <button class="icon-btn" @click="logout" aria-label="ออกจากระบบ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>\
+            <a class="icon-btn" href="#/guide" aria-label="คู่มือ" title="คู่มือ"><FlatIcon name="help" /></a>\
+            <button class="icon-btn" @click="logout" aria-label="ออกจากระบบ"><FlatIcon name="logout" /></button>\
           </div>\
         </div>\
         <nav class="bottom-nav">\
-          <a href="#/dashboard" :class="{active: view===\'dashboard\'}">🏠<span class="nav-label">หน้าหลัก</span></a>\
-          <a href="#/products" :class="{active: view===\'products\'}">📦<span class="nav-label">สินค้า</span></a>\
-          <a href="#/accounting" :class="{active: view===\'accounting\'}">💰<span class="nav-label">บัญชี</span></a>\
-          <a href="#/creditors" :class="{active: view===\'creditors\'}">🤝<span class="nav-label">เจ้าหนี้</span></a>\
-          <a href="#/reports" :class="{active: view===\'reports\'}">📊<span class="nav-label">รายงาน</span></a>\
-          <a href="#/settings" :class="{active: view===\'settings\'}">⚙️<span class="nav-label">ตั้งค่า</span></a>\
+          <a href="#/dashboard" :class="{active: view===\'dashboard\'}"><FlatIcon name="home" /><span class="nav-label">หน้าหลัก</span></a>\
+          <a href="#/products" :class="{active: view===\'products\'}"><FlatIcon name="box" /><span class="nav-label">สินค้า</span></a>\
+          <a href="#/accounting" :class="{active: view===\'accounting\'}"><FlatIcon name="wallet" /><span class="nav-label">บัญชี</span></a>\
+          <a href="#/creditors" :class="{active: view===\'creditors\'}"><FlatIcon name="users" /><span class="nav-label">เจ้าหนี้</span></a>\
+          <a href="#/reports" :class="{active: view===\'reports\'}"><FlatIcon name="chart" /><span class="nav-label">รายงาน</span></a>\
+          <a href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" /><span class="nav-label">ตั้งค่า</span></a>\
         </nav>\
       </div>'
   }
@@ -978,7 +998,7 @@
         </div>\
         <div class="card">\
           <div v-if="list.length === 0" class="empty">\
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>\
+            <FlatIcon name="box" />\
             ไม่พบสินค้า\
           </div>\
           <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="detailProductId = p.id" :data-testid="\'card-product-\' + p.id">\
@@ -997,7 +1017,7 @@
               </div>\
             </div>\
             <span class="product-status" v-html="statusBadge(p)"></span>\
-            <button class="btn ghost sm product-record-action" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-record-details-\' + p.id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>\
+            <button class="btn ghost sm product-record-action" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-record-details-\' + p.id"><FlatIcon name="eye" /></button>\
           </div>\
         </div>\
         <ProductForm v-if="showForm" :product="editProduct" @close="showForm = false" @saved="editProduct = null" />\
@@ -1774,9 +1794,63 @@
 
   var Guide = {
     data: function () {
-      return { store: store, selectedGuide: 'cloudflare' }
+      return {
+        store: store,
+        selectedGuide: 'cloudflare',
+        d1Step: 1,
+        d1DatabaseName: 'pawnshop',
+        d1DatabaseId: ''
+      }
+    },
+    computed: {
+      d1CreateCommand: function () {
+        return 'wrangler d1 create ' + this.d1DatabaseName
+      },
+      d1SchemaCommand: function () {
+        return 'wrangler d1 execute ' + this.d1DatabaseName + ' --remote --file=cloudflare/schema.sql --config cloudflare/wrangler.toml'
+      },
+      d1DeployCommand: function () {
+        return 'node scripts/build-cloudflare.js\nwrangler deploy --config cloudflare/wrangler.toml'
+      },
+      d1WranglerConfig: function () {
+        return [
+          'name = "pawnshop-api"',
+          'main = "worker.js"',
+          'compatibility_date = "2026-10-28"',
+          '',
+          '[[d1_databases]]',
+          'binding = "DB"',
+          'database_name = "' + this.d1DatabaseName + '"',
+          'database_id = "' + this.d1DatabaseId + '"'
+        ].join('\n')
+      }
     },
     methods: {
+      validD1DatabaseName: function () {
+        return /^[A-Za-z0-9_-]{1,63}$/.test(this.d1DatabaseName)
+      },
+      validD1DatabaseId: function () {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(this.d1DatabaseId)
+      },
+      goD1Step: function (step) {
+        if (step > 1 && !this.validD1DatabaseName()) {
+          snack('ชื่อฐานข้อมูลใช้ได้เฉพาะ A-Z, a-z, 0-9, _ และ - (ไม่เกิน 63 ตัว)', true)
+          return
+        }
+        if (step > 2 && !this.validD1DatabaseId()) {
+          snack('กรุณาวาง Database ID รูปแบบ UUID จากผลลัพธ์คำสั่งสร้าง D1', true)
+          return
+        }
+        this.d1Step = Math.max(1, Math.min(4, step))
+      },
+      copyD1: async function (text, label) {
+        try {
+          await navigator.clipboard.writeText(text)
+          snack('คัดลอก' + label + 'แล้ว')
+        } catch (error) {
+          snack('คัดลอกไม่สำเร็จ กรุณาเลือกข้อความแล้วคัดลอกด้วยตนเอง', true)
+        }
+      },
       copyCode: async function () {
         try {
           var text = (typeof window.PAWN_CODE_GS === 'string' && window.PAWN_CODE_GS.length > 1000)
@@ -1805,6 +1879,52 @@
         <div v-if="selectedGuide===\'cloudflare\'" class="card">\
           <div class="card-title">คู่มือเชื่อมต่อ Cloudflare D1</div>\
           <p style="font-size:var(--text-sm)">ใช้ Worker เป็นตัวกลางให้แอปติดต่อฐานข้อมูล D1 โดยไม่เปิดฐานข้อมูลให้เข้าใช้งานโดยตรง</p>\
+          <div class="card mt-4 d1-wizard">\
+            <div class="card-title">ตัวช่วยสร้างฐานข้อมูล D1</div>\
+            <p class="page-sub">ทำตาม 4 ขั้นตอนเพื่อสร้าง D1 ใหม่และผูกเข้ากับ Worker โดยคำสั่งจะทำงานบนเครื่องของคุณ ไม่ต้องใส่ API token ในเว็บ</p>\
+            <div class="d1-wizard-steps" aria-label="ขั้นตอนสร้างฐานข้อมูล D1">\
+              <button v-for="step in 4" :key="step" type="button" class="chip" :class="{active: d1Step===step}" :aria-current="d1Step===step ? \'step\' : null" @click="goD1Step(step)">{{ step }}. {{ [\'สร้าง D1\', \'ผูกฐานข้อมูล\', \'เตรียมตาราง\', \'Deploy Worker\'][step-1] }}</button>\
+            </div>\
+            <div v-if="d1Step===1" class="d1-wizard-panel">\
+              <h3>ขั้นตอน 1: สร้างฐานข้อมูล D1</h3>\
+              <p>ติดตั้ง Wrangler และเข้าสู่ระบบ Cloudflare ก่อน (ทำครั้งเดียว) จากนั้นเปิด PowerShell ที่โฟลเดอร์โครงการ</p>\
+              <pre class="code-box">npm install --global wrangler\nwrangler login</pre>\
+              <label class="field"><span>ชื่อฐานข้อมูล</span><input class="input" v-model.trim="d1DatabaseName" maxlength="63" pattern="[A-Za-z0-9_-]+" autocomplete="off" /></label>\
+              <p v-if="!validD1DatabaseName()" class="err">ใช้ได้เฉพาะ A-Z, a-z, 0-9, _ และ - ความยาวไม่เกิน 63 ตัว</p>\
+              <pre class="code-box">{{ d1CreateCommand }}</pre>\
+              <button type="button" class="btn sm outline" :disabled="!validD1DatabaseName()" @click="copyD1(d1CreateCommand, \'คำสั่งสร้าง D1 \')">คัดลอกคำสั่งสร้าง D1</button>\
+              <p class="hint mt-4">รันคำสั่งใน PowerShell แล้วคัดลอกค่า <code>database_id</code> ที่ Wrangler แสดงไว้เพื่อใช้ขั้นตอนถัดไป</p>\
+            </div>\
+            <div v-else-if="d1Step===2" class="d1-wizard-panel">\
+              <h3>ขั้นตอน 2: ผูก D1 กับ Worker</h3>\
+              <label class="field"><span>Database ID จาก Wrangler</span><input class="input" v-model.trim="d1DatabaseId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" /></label>\
+              <p v-if="d1DatabaseId && !validD1DatabaseId()" class="err">Database ID ต้องเป็น UUID ที่ได้จากคำสั่งสร้าง D1</p>\
+              <p>แทนที่เนื้อหาใน <code>cloudflare/wrangler.toml</code> ด้วย config นี้ หรือแก้เฉพาะค่าฐานข้อมูลให้ตรงกัน:</p>\
+              <pre class="code-box">{{ d1WranglerConfig }}</pre>\
+              <button type="button" class="btn sm outline" :disabled="!validD1DatabaseId() || !validD1DatabaseName()" @click="copyD1(d1WranglerConfig, \'ค่า config \')">คัดลอก config</button>\
+              <p class="hint mt-4">อย่าเผยแพร่ Database ID พร้อมข้อมูลลับอื่น และอย่าใส่ API token ลงในไฟล์หรือหน้าเว็บ</p>\
+            </div>\
+            <div v-else-if="d1Step===3" class="d1-wizard-panel">\
+              <h3>ขั้นตอน 3: สร้างตารางของแอป</h3>\
+              <p>ตรวจว่าแก้ <code>wrangler.toml</code> และใส่ Database ID ที่ถูกต้องแล้ว คำสั่งนี้สร้างตารางแอปและตาราง session โดยไม่ลบข้อมูลเดิม</p>\
+              <pre class="code-box">{{ d1SchemaCommand }}</pre>\
+              <button type="button" class="btn sm outline" :disabled="!validD1DatabaseId() || !validD1DatabaseName()" @click="copyD1(d1SchemaCommand, \'คำสั่งสร้างตาราง \')">คัดลอกคำสั่งสร้างตาราง</button>\
+              <p class="hint mt-4">วิซาร์ดนี้สำหรับ D1 ใหม่ หากฐานข้อมูลมีข้อมูลเดิมอยู่แล้ว ให้สำรองข้อมูลและตรวจสอบ schema ก่อนดำเนินการ</p>\
+            </div>\
+            <div v-else class="d1-wizard-panel">\
+              <h3>ขั้นตอน 4: Build และ Deploy Worker</h3>\
+              <p>รันคำสั่งต่อไปนี้จากโฟลเดอร์หลักของโครงการ:</p>\
+              <pre class="code-box">{{ d1DeployCommand }}</pre>\
+              <button type="button" class="btn sm outline" @click="copyD1(d1DeployCommand, \'คำสั่ง Build และ Deploy \')">คัดลอกคำสั่ง Build และ Deploy</button>\
+              <p class="hint mt-4">หลัง deploy ตั้งค่า <code>SETUP_SECRET</code> และสร้างบัญชีผู้ดูแลตามคู่มือด้านล่าง แล้วนำ URL Worker ไปเชื่อมต่อกับแอป</p>\
+            </div>\
+            <div class="d1-wizard-actions">\
+              <button type="button" class="btn ghost sm" :disabled="d1Step===1" @click="goD1Step(d1Step-1)">ย้อนกลับ</button>\
+              <span>ขั้นตอน {{ d1Step }} จาก 4</span>\
+              <button v-if="d1Step<4" type="button" class="btn sm" @click="goD1Step(d1Step+1)">ถัดไป</button>\
+              <a v-else class="btn sm" href="cloudflare/README.md" target="_blank" rel="noopener">คู่มือตั้งค่าผู้ดูแล →</a>\
+            </div>\
+          </div>\
           <div class="steps mt-4">\
             <div class="step"><div class="n"></div><div class="body">\
               <b>เตรียม URL ของ Cloudflare Worker</b>\
@@ -1821,7 +1941,7 @@
           </div>\
           <div class="card mt-4" style="background:var(--color-surface-2)">\
             <div class="card-title">ยังไม่มี Worker หรือฐานข้อมูล?</div>\
-            <p style="font-size:var(--text-sm)">ต้องตั้งค่า D1, ผูก binding ชื่อ <code>DB</code>, เตรียมตารางของระบบ และ deploy Worker ก่อน การเชื่อมต่อจากหน้านี้อย่างเดียวไม่สามารถสร้างฐานข้อมูลหรือบัญชีผู้ดูแลได้</p>\
+            <p style="font-size:var(--text-sm)">ใช้ตัวช่วยสร้างด้านบนเพื่อสร้าง D1 และเตรียมตาราง จากนั้นตั้งค่า Worker และ deploy ก่อน การเชื่อมต่อจากหน้านี้อย่างเดียวไม่สามารถสร้างบัญชีผู้ดูแลได้</p>\
             <p class="mt-4" style="font-size:var(--text-sm)"><a href="cloudflare/README.md" target="_blank" rel="noopener">เปิดคู่มือติดตั้งและ deploy สำหรับผู้ดูแลระบบ →</a></p>\
           </div>\
           <div class="card mt-4">\
@@ -1921,7 +2041,7 @@
 
   var app = createApp(Root)
   // register ทุก component แบบ global เพื่อให้ component ที่ซ้อนกัน (Modal/ProductForm/FinanceDialog) ใช้ได้
-  var allComponents = { Snackbar: Snackbar, Modal: Modal, Welcome: Welcome, Login: Login, Nav: Nav, Dashboard: Dashboard, ProductForm: ProductForm, ProductRecordDialog: ProductRecordDialog, Products: Products, FinanceDialog: FinanceDialog, ProductDetail: ProductDetail, Accounting: Accounting, Creditors: Creditors, Reports: Reports, Settings: Settings, Guide: Guide }
+  var allComponents = { Snackbar: Snackbar, FlatIcon: FlatIcon, Modal: Modal, Welcome: Welcome, Login: Login, Nav: Nav, Dashboard: Dashboard, ProductForm: ProductForm, ProductRecordDialog: ProductRecordDialog, Products: Products, FinanceDialog: FinanceDialog, ProductDetail: ProductDetail, Accounting: Accounting, Creditors: Creditors, Reports: Reports, Settings: Settings, Guide: Guide }
   Object.keys(allComponents).forEach(function (k) { app.component(k, allComponents[k]) })
   // helper ให้ทุก component เข้าถึงการเปลี่ยนหน้าแบบง่าย
   app.config.globalProperties.$go = function (path) { location.hash = '#/' + path }

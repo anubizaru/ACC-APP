@@ -1,6 +1,6 @@
 # คู่มือติดตั้งและเชื่อมต่อ Cloudflare D1
 
-แอปติดต่อฐานข้อมูลผ่าน Cloudflare Worker ไม่ได้เชื่อมต่อ D1 โดยตรง คู่มือนี้เหมาะสำหรับผู้ดูแลระบบที่มีบัญชี Cloudflare และเตรียมฐานข้อมูลของแอปไว้แล้ว
+แอปติดต่อฐานข้อมูลผ่าน Cloudflare Worker ไม่ได้เชื่อมต่อ D1 โดยตรง ผู้ดูแลสามารถใช้ตัวช่วยสร้างในหน้า **คู่มือเชื่อมต่อฐานข้อมูล → Cloudflare D1** หรือทำตามขั้นตอนด้านล่าง
 
 ## สำหรับผู้ใช้งานแอป
 
@@ -18,9 +18,6 @@ URL ของ Worker ดูได้ที่ Cloudflare Dashboard → **Workers
 
 - Node.js และ npm
 - บัญชี Cloudflare ที่เข้าถึง Worker และ D1 ได้
-- ฐานข้อมูล D1 ที่มีตารางของแอป เช่น `Employees`, `Products`, `Statements`, `Accounting`, `Creditors`, `CreditorMoves`, `Types`, `Due`, `Operations` และ `Config`
-
-> การสร้าง D1 เปล่าอย่างเดียวไม่เพียงพอ เพราะไฟล์ `schema.sql` ในโครงการนี้สร้างเฉพาะตาราง `PawnAuth` ไม่ได้สร้างตารางธุรกิจทั้งหมด ควรใช้ D1 ที่เตรียมตารางแอปไว้แล้ว
 
 ### 1. ติดตั้ง Wrangler และเข้าสู่ระบบ
 
@@ -33,29 +30,32 @@ wrangler login
 
 ทำตามหน้าต่างเบราว์เซอร์เพื่ออนุญาต Wrangler ให้เข้าถึงบัญชี Cloudflare
 
-### 2. ตรวจสอบการตั้งค่า D1
+### 2. สร้างฐานข้อมูล D1 ใหม่
 
-เปิด `cloudflare/wrangler.toml` แล้วตรวจสอบชื่อ Worker, ชื่อฐานข้อมูล และ `database_id` ให้ตรงกับบัญชีของคุณ:
+รันจากโฟลเดอร์หลักของโครงการ:
+
+```powershell
+wrangler d1 create pawnshop
+```
+
+จดค่า `database_id` จากผลลัพธ์ แล้วใส่ใน `cloudflare/wrangler.toml` ให้ตรงกับฐานข้อมูลที่เพิ่งสร้าง:
 
 ```toml
-name = "pawnshop-api"
-main = "worker.js"
-
 [[d1_databases]]
 binding = "DB"
 database_name = "pawnshop"
 database_id = "ใส่ D1 database ID ของคุณ"
 ```
 
-หา Database ID ได้จาก Cloudflare Dashboard → **Workers & Pages** → **D1 SQL database** → เลือกฐานข้อมูล ค่าของ `binding` ต้องเป็น `DB` ตามที่ Worker ใช้งาน
+### 3. สร้างตารางของแอป
 
-### 3. เตรียมตารางการยืนยันตัวตน
-
-คำสั่งนี้เพิ่มตาราง `PawnAuth` สำหรับ session และ rate limit โดยไม่ลบหรือสร้างตารางธุรกิจใหม่:
+ไฟล์ `cloudflare/schema.sql` สร้างตารางธุรกิจทั้งหมดที่ Worker ใช้ รวมถึง `PawnAuth` สำหรับ session และ rate limit:
 
 ```powershell
 wrangler d1 execute pawnshop --remote --file=cloudflare/schema.sql --config cloudflare/wrangler.toml
 ```
+
+คำสั่งใช้ `CREATE TABLE IF NOT EXISTS` และไม่ลบข้อมูล อย่างไรก็ตาม หากใช้ D1 เดิมที่มีตารางอยู่แล้ว จะไม่ปรับโครงสร้างตารางเดิมให้ตรงกับ schema ใหม่ ตรวจสอบและสำรองข้อมูลก่อนนำไปใช้กับฐานข้อมูลเดิม
 
 ### 4. สร้างและ deploy Worker
 

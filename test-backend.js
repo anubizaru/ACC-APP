@@ -301,5 +301,31 @@ const redeemed = boot2.statements.filter(s => s.type === 'redeem')
 eq('มีรายการไถ่ถอน 2 แถว (ต้นฉบับ + กลับรายการ)', redeemed.length, 2)
 okTrue('ต้นฉบับถูกมาร์ก void', String(redeemed[0].void) === 'TRUE')
 
+// 25) แก้ข้อมูลหลักของสินค้าและซิงก์กับรายการรับสินค้าแรก
+const editableRes = G.route_({
+  action: 'product.create', token: token, requestId: 'rq-edit-create',
+  data: { productNo: 22, customerName: 'ทดสอบแก้สินค้า', detail: 'แหวน', price: 1000, interest: 50, due: 30, typeId: 'ทอง-ประเภท', startDate: TODAY }
+})
+okTrue('สร้างสินค้าทดสอบแก้ไข', editableRes.ok === true)
+const editRes = G.route_({
+  action: 'product.update', token: token, requestId: 'rq-edit-product',
+  data: { id: editableRes.product.id, productNo: 23, customerName: 'ทดสอบแก้สินค้า', detail: 'แหวน', typeId: 'ทอง-ประเภท', price: 1200, interest: 60, startDate: '2026-01-05', endDate: '2026-02-20' }
+})
+okTrue('แก้เลขที่ เงินต้น ค่าบริการ และวันที่สำเร็จ', editRes.ok === true)
+eq('เลขที่สินค้าเปลี่ยนแล้ว', editRes.product.productNo, 23)
+eq('ข้อมูลสินค้าเปลี่ยนแล้ว', [editRes.product.price, editRes.product.interest, editRes.product.startDate, editRes.product.endDate], [1200, 60, '2026-01-05', '2026-02-20'])
+const editBoot = G.route_({ action: 'bootstrap', token: token })
+const opening = editBoot.statements.filter(s => s.productId === editableRes.product.id && s.type === 'new')[0]
+eq('ซิงก์รายการรับสินค้าแรกตามข้อมูลที่แก้', [opening.date, opening.pay, opening.priceAfter, opening.interestAfter, opening.endDateAfter], ['2026-01-05', 1200, 1200, 60, '2026-02-20'])
+eq('ปฏิเสธเลขที่สินค้าซ้ำขณะแก้ไข', G.route_({
+  action: 'product.update', token: token, requestId: 'rq-edit-duplicate',
+  data: { id: editableRes.product.id, productNo: 20, customerName: 'ทดสอบแก้สินค้า', detail: 'แหวน', typeId: 'ทอง-ประเภท', price: 1200, interest: 60, startDate: '2026-01-05', endDate: '2026-02-20' }
+}), { ok: false, error: 'invalid-productNo-taken' })
+G.route_({ action: 'finance.op', token: token, requestId: 'rq-edit-history', data: { id: editableRes.product.id, op: 'interest', amount: 60 } })
+eq('ล็อกเงินและวันที่เมื่อมีประวัติทางการเงิน', G.route_({
+  action: 'product.update', token: token, requestId: 'rq-edit-history-block',
+  data: { id: editableRes.product.id, productNo: 23, customerName: 'ทดสอบแก้สินค้า', detail: 'แหวน', typeId: 'ทอง-ประเภท', price: 1300, interest: 60, startDate: '2026-01-05', endDate: '2026-02-20' }
+}), { ok: false, error: 'product-has-history' })
+
 console.log('\nผลลัพธ์ backend: ' + pass + ' ผ่าน, ' + fail + ' พลาด')
 process.exit(fail ? 1 : 0)

@@ -525,14 +525,62 @@ function productUpdate_(data, user, requestId) {
     if (!p) return { ok: false, error: 'not-found' }
     if (Number(p.status) === 0) return { ok: false, error: 'product-closed' }
 
-    // แก้ได้เฉพาะข้อมูลทั่วไป — ห้ามแก้เงิน/ดอกเบี้ย/สถานะผ่านทางนี้ (ต้องทำรายการการเงิน)
+    var productNo = data.productNo === undefined ? Number(p.productNo) : toIntBaht(data.productNo)
+    if (productNo === null || productNo <= 0) return { ok: false, error: 'invalid-productNo' }
+    for (var n = 0; n < rows.length; n++) {
+      if (rows[n].id !== p.id && Number(rows[n].productNo) === productNo) return { ok: false, error: 'invalid-productNo-taken' }
+    }
+
+    var price = data.price === undefined ? Number(p.price) : toIntBaht(data.price)
+    if (price === null || price <= 0) return { ok: false, error: 'invalid-price' }
+    var interest = data.interest === undefined ? Number(p.interest) : toIntBaht(data.interest)
+    if (interest === null || interest < 0) return { ok: false, error: 'invalid-interest' }
+    var startDate = data.startDate === undefined ? String(p.startDate) : String(data.startDate)
+    var endDate = data.endDate === undefined ? String(p.endDate) : String(data.endDate)
+    function validDate(value) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+      var parsed = dateParse(value)
+      return !!parsed && dateFmt(parsed) === value
+    }
+    if (!validDate(startDate)) return { ok: false, error: 'invalid-startDate' }
+    if (Number(p.due) === 0) {
+      endDate = '0'
+    } else if (!validDate(endDate)) {
+      return { ok: false, error: 'invalid-endDate' }
+    }
+
+    var statements = readAll_(TAB.STATEMENTS)
+    var productStatements = statements.filter(function (statement) { return statement.productId === p.id })
+    var hasFinancialHistory = productStatements.some(function (statement) { return statement.type !== 'new' })
+    var financialChanged = price !== Number(p.price) || interest !== Number(p.interest) ||
+      startDate !== String(p.startDate) || endDate !== String(p.endDate)
+    if (hasFinancialHistory && financialChanged) return { ok: false, error: 'product-has-history' }
+
+    var openingStatement = null
+    if (financialChanged) {
+      for (var j = 0; j < productStatements.length; j++) {
+        if (productStatements[j].type === 'new') { openingStatement = productStatements[j]; break }
+      }
+      if (!openingStatement) return { ok: false, error: 'missing-opening-statement' }
+    }
+
+    p.productNo = productNo
     p.customerName = String(data.customerName || p.customerName).trim()
     p.customerIdCard = String(data.customerIdCard || '').trim()
     if (data.typeId) p.typeId = String(data.typeId)
     p.detail = String(data.detail || p.detail).trim()
     p.desc = String(data.desc || '').trim()
-    if (data.startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(data.startDate))) {
-      p.startDate = String(data.startDate)
+    if (financialChanged) {
+      p.price = price
+      p.interest = interest
+      p.startDate = startDate
+      p.endDate = endDate
+      openingStatement.date = startDate
+      openingStatement.pay = price
+      openingStatement.priceAfter = price
+      openingStatement.interestAfter = interest
+      openingStatement.endDateAfter = endDate
+      updateObj_(TAB.STATEMENTS, openingStatement)
     }
     p.updatedAt = nowStr_()
     updateObj_(TAB.PRODUCTS, p)

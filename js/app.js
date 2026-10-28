@@ -641,7 +641,8 @@
           price: p.price != null ? p.price : '',
           interest: p.interest != null ? p.interest : '',
           due: p.due != null ? p.due : 30,
-          startDate: p.startDate || todayStr()
+          startDate: p.startDate || todayStr(),
+          endDate: p.endDate && p.endDate !== '0' ? p.endDate : ''
         },
         busy: false,
         applyingHistory: false,
@@ -671,6 +672,12 @@
       endPreview: function () {
         if (this.form.due == 0) return '—'
         return fmtDate(calEndDate(Number(this.form.due), this.form.startDate))
+      },
+      canEditFinancial: function () {
+        if (!this.isEdit || !store.data) return true
+        return !store.data.statements.some(function (statement) {
+          return statement.productId === this.product.id && statement.type !== 'new'
+        }, this)
       }
     },
     watch: {
@@ -713,13 +720,19 @@
         if (!this.form.customerName.trim()) e.customerName = 'กรุณากรอกชื่อลูกค้า'
         if (!this.form.detail.trim()) e.detail = 'กรุณากรอกรายละเอียดสินค้า'
         if (!this.form.typeId) e.typeId = 'เลือกประเภทสินค้า'
-        if (!this.isEdit) {
-          var productNo = Number(this.form.productNo)
-          if (!Number.isInteger(productNo) || productNo <= 0) e.productNo = 'เลขที่สินค้าต้องเป็นจำนวนเต็มบวก'
+        var productNo = Number(this.form.productNo)
+        if (!Number.isInteger(productNo) || productNo <= 0) e.productNo = 'เลขที่สินค้าต้องเป็นจำนวนเต็มบวก'
+        if (!this.isEdit || this.canEditFinancial) {
           var price = Number(this.form.price)
           if (!price || price <= 0 || !Number.isInteger(price)) e.price = 'ราคาต้องเป็นจำนวนเต็มบาท มากกว่า 0'
           var it = Number(this.form.interest)
           if (isNaN(it) || it < 0 || !Number.isInteger(it)) e.interest = 'ค่าบริการต้องเป็นจำนวนเต็มบาท (0 ได้)'
+          var start = dateParse(this.form.startDate)
+          if (!start || dateFmt(start) !== this.form.startDate) e.startDate = 'กรุณาระบุวันที่รับให้ถูกต้อง'
+          if (Number(this.form.due) !== 0) {
+            var end = dateParse(this.form.endDate)
+            if (!end || dateFmt(end) !== this.form.endDate) e.endDate = 'กรุณาระบุวันครบกำหนดให้ถูกต้อง'
+          }
         }
         this.errs = e
         return Object.keys(e).length === 0
@@ -738,7 +751,12 @@
         } else {
           var errorMessages = {
             'invalid-productNo': 'เลขที่สินค้าต้องเป็นจำนวนเต็มบวก',
-            'invalid-productNo-taken': 'เลขที่สินค้านี้มีอยู่แล้ว กรุณาใช้เลขอื่น'
+            'invalid-productNo-taken': 'เลขที่สินค้านี้มีอยู่แล้ว กรุณาใช้เลขอื่น',
+            'invalid-price': 'เงินต้นต้องเป็นจำนวนเต็มบาท มากกว่า 0',
+            'invalid-interest': 'ค่าบริการต้องเป็นจำนวนเต็มบาท (0 ได้)',
+            'invalid-startDate': 'วันที่รับไม่ถูกต้อง',
+            'invalid-endDate': 'วันครบกำหนดไม่ถูกต้อง',
+            'product-has-history': 'สินค้านี้มีประวัติทำรายการแล้ว จึงแก้เงินและวันที่ไม่ได้'
           }
           var error = res && res.error
           snack('บันทึกไม่สำเร็จ (' + (errorMessages[error] || error || 'ผิดพลาด') + ')', true)
@@ -748,7 +766,7 @@
     template: '\
       <Modal :title="isEdit ? \'แก้ไขข้อมูลสินค้า\' : \'รับสินค้าใหม่\'" @close="$emit(\'close\')">\
         <form @submit.prevent="submit">\
-          <div v-if="!isEdit" class="field"><label for="pf-product-no">เลขที่สินค้า *</label>\
+          <div class="field"><label for="pf-product-no">เลขที่สินค้า *</label>\
             <input id="pf-product-no" class="input" type="number" min="1" step="1" :class="{invalid: errs.productNo}" v-model.number="form.productNo" data-testid="input-product-no" />\
             <span v-if="errs.productNo" class="err">{{ errs.productNo }}</span>\
           </div>\
@@ -788,7 +806,7 @@
             <input id="pf-detail" class="input" :class="{invalid: errs.detail}" v-model="form.detail" data-testid="input-detail" />\
             <span v-if="errs.detail" class="err">{{ errs.detail }}</span>\
           </div>\
-          <template v-if="!isEdit">\
+          <template v-if="!isEdit || canEditFinancial">\
             <div class="grid grid-2">\
               <div class="field"><label for="pf-price">ราคา/เงินต้น (บาท) *</label>\
                 <input id="pf-price" class="input" type="number" min="1" step="1" :class="{invalid: errs.price}" v-model.number="form.price" data-testid="input-price" />\
@@ -806,11 +824,18 @@
                 </select>\
               </div>\
               <div class="field"><label for="pf-date">วันที่รับ</label>\
-                <input id="pf-date" class="input" type="date" v-model="form.startDate" />\
+                <input id="pf-date" class="input" type="date" :class="{invalid: errs.startDate}" v-model="form.startDate" data-testid="input-start-date" />\
+                <span v-if="errs.startDate" class="err">{{ errs.startDate }}</span>\
               </div>\
             </div>\
-            <p class="hint" style="margin-bottom:16px">วันครบกำหนด: <b>{{ endPreview }}</b></p>\
+            <div v-if="isEdit" class="field"><label for="pf-end-date">วันครบกำหนด</label>\
+              <input id="pf-end-date" class="input" type="date" :class="{invalid: errs.endDate}" v-model="form.endDate" :disabled="Number(form.due) === 0" data-testid="input-end-date" />\
+              <span v-if="errs.endDate" class="err">{{ errs.endDate }}</span>\
+              <span v-else-if="Number(form.due) === 0" class="hint">สินค้านี้ไม่มีวันครบกำหนด</span>\
+            </div>\
+            <p v-else class="hint" style="margin-bottom:16px">วันครบกำหนด: <b>{{ endPreview }}</b></p>\
           </template>\
+          <div v-if="isEdit && !canEditFinancial" class="hint" style="margin-bottom:16px">สินค้านี้มีประวัติทำรายการแล้ว ระบบล็อกเงินต้น ค่าบริการ และวันที่เพื่อรักษาความถูกต้องของประวัติและการกลับรายการ</div>\
           <div class="field"><label for="pf-desc">หมายเหตุ</label>\
             <textarea id="pf-desc" class="input" rows="2" v-model="form.desc"></textarea>\
           </div>\

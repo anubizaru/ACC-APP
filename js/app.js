@@ -1736,7 +1736,7 @@
 
   var Guide = {
     data: function () {
-      return { store: store }
+      return { store: store, selectedGuide: 'cloudflare' }
     },
     methods: {
       copyCode: async function () {
@@ -1758,9 +1758,46 @@
     template: '\
       <div>\
         <button v-if="!store.user" class="btn ghost sm mb-4" @click="$go(\'dashboard\')">← กลับหน้าเข้าสู่ระบบ</button>\
-        <h2 class="page-title">คู่มือเชื่อมต่อ Google Sheets</h2>\
-        <p class="page-sub">ใช้เวลาตั้งค่าประมาณ 10 นาที ทำครั้งเดียว ไม่มีค่าใช้จ่าย</p>\
-        <div class="card">\
+        <h2 class="page-title">คู่มือเชื่อมต่อฐานข้อมูล</h2>\
+        <p class="page-sub">เลือกวิธีเชื่อมต่อที่ต้องการใช้งาน</p>\
+        <div class="row mb-4" role="tablist" aria-label="เลือกคู่มือการเชื่อมต่อ">\
+          <button class="btn sm" :class="selectedGuide===\'cloudflare\' ? \'gold\' : \'ghost\'" role="tab" :aria-selected="selectedGuide===\'cloudflare\'" @click="selectedGuide=\'cloudflare\'">Cloudflare D1</button>\
+          <button class="btn sm" :class="selectedGuide===\'google\' ? \'gold\' : \'ghost\'" role="tab" :aria-selected="selectedGuide===\'google\'" @click="selectedGuide=\'google\'">Google Sheets</button>\
+        </div>\
+        <div v-if="selectedGuide===\'cloudflare\'" class="card">\
+          <div class="card-title">คู่มือเชื่อมต่อ Cloudflare D1</div>\
+          <p style="font-size:var(--text-sm)">ใช้ Worker เป็นตัวกลางให้แอปติดต่อฐานข้อมูล D1 โดยไม่เปิดฐานข้อมูลให้เข้าใช้งานโดยตรง</p>\
+          <div class="steps mt-4">\
+            <div class="step"><div class="n"></div><div class="body">\
+              <b>เตรียม URL ของ Cloudflare Worker</b>\
+              <p>ผู้ดูแลระบบต้องสร้าง D1 และ deploy Worker ของแอปก่อน URL จะมีรูปแบบ <code>https://ชื่อ-worker.ชื่อบัญชี.workers.dev</code> ตัวอย่าง Worker ที่ใช้งานอยู่: <code>https://pawnshop-api.anubizaru.workers.dev</code></p>\
+            </div></div>\
+            <div class="step"><div class="n"></div><div class="body">\
+              <b>เลือก Cloudflare D1 ในหน้าเชื่อมต่อ</b>\
+              <p>ออกจากระบบหรือเปิดแอปใหม่ เลือกผู้ให้บริการ <b>Cloudflare D1 (Worker)</b> แล้ววาง URL ของ Worker ในช่อง URL โดยใช้ URL หลัก ไม่เติม <code>/query</code> หรือ <code>/api</code></p>\
+            </div></div>\
+            <div class="step"><div class="n"></div><div class="body">\
+              <b>ทดสอบการเชื่อมต่อและเข้าสู่ระบบ</b>\
+              <p>กด <b>เชื่อมต่อ</b> เมื่อแอปแจ้งว่าเชื่อมต่อสำเร็จ ให้เข้าสู่ระบบด้วยอีเมลและรหัสผ่านผู้ดูแล/บัญชีที่สร้างไว้ในระบบ</p>\
+            </div></div>\
+          </div>\
+          <div class="card mt-4" style="background:var(--color-surface-2)">\
+            <div class="card-title">ยังไม่มี Worker หรือฐานข้อมูล?</div>\
+            <p style="font-size:var(--text-sm)">ต้องตั้งค่า D1, ผูก binding ชื่อ <code>DB</code>, เตรียมตารางของระบบ และ deploy Worker ก่อน การเชื่อมต่อจากหน้านี้อย่างเดียวไม่สามารถสร้างฐานข้อมูลหรือบัญชีผู้ดูแลได้</p>\
+            <p class="mt-4" style="font-size:var(--text-sm)"><a href="cloudflare/README.md" target="_blank" rel="noopener">เปิดคู่มือติดตั้งและ deploy สำหรับผู้ดูแลระบบ →</a></p>\
+          </div>\
+          <div class="card mt-4">\
+            <div class="card-title">ข้อควรทราบ</div>\
+            <ul style="font-size:var(--text-sm);color:var(--color-text-muted);padding-left:20px;line-height:1.9">\
+              <li>ใช้ URL แบบ HTTPS ของ Worker เท่านั้น และอย่าเปิดเผยรหัสลับสำหรับตั้งค่า Worker</li>\
+              <li>ถ้าฐานข้อมูลมีข้อมูลหรือบัญชีผู้ใช้อยู่แล้ว อย่ารันขั้นตอนเริ่มต้นระบบซ้ำ</li>\
+              <li>ข้อมูลจะถูกบันทึกใน D1 ที่ Worker ผูกไว้ ตรวจสอบให้แน่ใจว่าเป็นฐานข้อมูลของร้านที่ถูกต้อง</li>\
+            </ul>\
+          </div>\
+        </div>\
+        <div v-else class="card">\
+          <h2 class="page-title">คู่มือเชื่อมต่อ Google Sheets</h2>\
+          <p class="page-sub">ใช้เวลาตั้งค่าประมาณ 10 นาที ทำครั้งเดียว ไม่มีค่าใช้จ่าย</p>\
           <div class="steps">\
             <div class="step"><div class="n"></div><div class="body">\
               <b>สร้าง Google Sheet ใหม่</b>\
@@ -1788,7 +1825,8 @@
             </div></div>\
           </div>\
         </div>\
-        <div class="card mt-4">\
+        </div>\
+        <div v-if="selectedGuide===\'google\'" class="card mt-4">\
           <div class="card-title">หมายเหตุสำคัญ</div>\
           <ul style="font-size:var(--text-sm);color:var(--color-text-muted);padding-left:20px;line-height:1.9">\
             <li>ข้อมูลทั้งหมดอยู่ใน Google Sheet ของคุณเอง — ดูและแก้ไขตรง ๆ ในชีตได้</li>\

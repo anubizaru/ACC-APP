@@ -366,33 +366,73 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 }
 @media (min-width: 640px) { .modal-mask { align-items: center; padding: var(--space-6); } }
 .modal {
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface-2);
   width: 100%; max-width: 560px;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  padding: var(--space-6);
-  max-height: 92dvh; overflow-y: auto;
+  max-height: 92dvh;
+  overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
 @media (min-width: 640px) { .modal { border-radius: var(--radius-xl); } }
-.product-detail-mask {
-  align-items: flex-start;
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-3);
+}
+.modal-header h3 { font-size: var(--text-lg); font-weight: 700; margin: 0; }
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  padding: 0 var(--space-6) var(--space-6);
+}
+.product-detail-mask {
+  align-items: center;
+  overflow: hidden;
+  overscroll-behavior: contain;
   padding: var(--space-3);
 }
 .product-detail-dialog {
   max-width: 900px;
-  max-height: none;
-  overflow: visible;
+  max-height: 92dvh;
+  padding: 0;
   margin: auto;
+}
+.product-detail-header {
+  flex: 0 0 auto;
+  padding: var(--space-6) var(--space-6) 0;
+}
+.product-detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 var(--space-6) var(--space-6);
 }
 @media (min-width: 640px) {
   .product-detail-mask { padding: var(--space-6); }
   .product-detail-dialog { margin: auto; }
 }
-.modal h3 { font-size: var(--text-lg); font-weight: 700; margin-bottom: var(--space-4); }
-.modal-actions { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-6); flex-wrap: wrap; }
+.modal-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin: var(--space-6) calc(-1 * var(--space-6)) 0;
+  padding: var(--space-3) var(--space-6);
+  flex-wrap: wrap;
+  background: var(--color-surface-2);
+  border-top: 1px solid var(--color-divider);
+}
 
 /* confirm summary box */
 .confirm-box {

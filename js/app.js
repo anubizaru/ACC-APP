@@ -337,10 +337,10 @@
     template: '\
       <div class="modal-mask" @click.self="$emit(\'close\')" role="dialog" :aria-label="title">\
         <div class="modal">\
-          <div class="row spread mb-4"><h3>{{ title }}</h3>\
+          <div class="modal-header"><h3>{{ title }}</h3>\
             <button class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด">✕</button>\
           </div>\
-          <slot></slot>\
+          <div class="modal-body"><slot></slot></div>\
         </div>\
       </div>'
   }
@@ -1107,7 +1107,6 @@
             <div class="payment-receipt-row"><span>รายการสินค้า</span><b>{{ receipt.product.detail }}</b></div>\
             <div class="payment-receipt-row"><span>เงินต้น</span><b>{{ fmtMoney(receipt.product.price) }} ฿</b></div>\
             <div class="payment-receipt-row"><span>ค่าบริการต่องวด</span><b>{{ fmtMoney(receipt.product.interest) }} ฿</b></div>\
-            <div class="payment-receipt-row payment-receipt-paid"><span>รับค่าบริการแล้ว</span><b>{{ fmtMoney(receipt.statement.profit) }} ฿</b></div>\
             <div class="payment-receipt-row"><span>วันที่ทำรายการ</span><b>{{ fmtDate(receipt.statement.date) }}</b></div>\
             <div class="payment-receipt-row payment-receipt-due"><span>ครบกำหนดครั้งถัดไป</span><b>{{ Number(receipt.product.due) === 0 ? \'ไม่มีวันครบกำหนด\' : (receipt.statement.endDateAfter && receipt.statement.endDateAfter !== \'0\' ? fmtDate(receipt.statement.endDateAfter) : \'—\') }}</b></div>\
           </div>\
@@ -1210,12 +1209,15 @@
     template: '\
       <div v-if="p" :class="inModal ? \'modal-mask product-detail-mask\' : \'\'" @click.self="inModal && $emit(\'close\')">\
         <div :class="inModal ? \'modal product-detail-dialog\' : \'\'" :role="inModal ? \'dialog\' : null" :aria-modal="inModal ? \'true\' : null" :aria-label="inModal ? \'รายละเอียดสินค้าเลขที่ \' + p.productNo : null">\
-        <button v-if="!inModal" class="btn ghost sm mb-4" @click="$go(\'products\')">← กลับรายการสินค้า</button>\
-        <div class="row spread">\
-          <h2 class="page-title" style="margin:0">สินค้าเลขที่ {{ p.productNo }} <span v-html="statusBadge(p)"></span></h2>\
-          <button v-if="inModal" class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด">✕</button>\
+        <div :class="inModal ? \'product-detail-header\' : \'\'">\
+          <button v-if="!inModal" class="btn ghost sm mb-4" @click="$go(\'products\')">← กลับรายการสินค้า</button>\
+          <div class="row spread">\
+            <h2 class="page-title" style="margin:0">สินค้าเลขที่ {{ p.productNo }} <span v-html="statusBadge(p)"></span></h2>\
+            <button v-if="inModal" class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด">✕</button>\
+          </div>\
+          <p class="page-sub" style="margin-top:8px">{{ typeOf(p.typeId) }} · {{ dueLabel(p.due) }}</p>\
         </div>\
-        <p class="page-sub" style="margin-top:8px">{{ typeOf(p.typeId) }} · {{ dueLabel(p.due) }}</p>\
+        <div :class="inModal ? \'product-detail-body\' : \'\'">\
         <div class="card">\
           <div class="grid grid-2">\
             <div><div class="muted" style="font-size:var(--text-xs)">ลูกค้า</div><b>{{ p.customerName }}</b></div>\
@@ -1258,6 +1260,7 @@
               </tbody>\
             </table>\
           </div>\
+        </div>\
         </div>\
         <FinanceDialog v-if="op" :product="p" :op="op" @close="op = null" />\
         <ProductForm v-if="showEditForm" :product="p" @close="showEditForm = false" />\

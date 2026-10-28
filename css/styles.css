@@ -374,6 +374,23 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
   box-shadow: var(--shadow-lg);
 }
 @media (min-width: 640px) { .modal { border-radius: var(--radius-xl); } }
+.product-detail-mask {
+  align-items: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-3);
+}
+.product-detail-dialog {
+  max-width: 900px;
+  max-height: none;
+  overflow: visible;
+  margin: auto;
+}
+@media (min-width: 640px) {
+  .product-detail-mask { padding: var(--space-6); }
+  .product-detail-dialog { margin: auto; }
+}
 .modal h3 { font-size: var(--text-lg); font-weight: 700; margin-bottom: var(--space-4); }
 .modal-actions { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-6); flex-wrap: wrap; }
 

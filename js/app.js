@@ -522,7 +522,7 @@
   /* ---------- หน้าหลัก ---------- */
 
   var Dashboard = {
-    data: function () { return { store: store } },
+    data: function () { return { store: store, selectedProductId: null } },
     computed: {
       dueSoon: function () {
         if (!store.data) return []
@@ -607,12 +607,13 @@
         <div class="card mt-4">\
           <div class="card-title">ใกล้ครบกำหนด / เกินกำหนด <a href="#/products" style="font-size:var(--text-xs)">ดูทั้งหมด →</a></div>\
           <div v-if="dueSoon.length === 0" class="empty">ไม่มีรายการใกล้ครบกำหนด</div>\
-          <div v-for="it in dueSoon" :key="it.p.id" class="list-row clickable" @click="$go(\'product/\' + it.p.id)">\
+          <div v-for="it in dueSoon" :key="it.p.id" class="list-row clickable" @click="selectedProductId = it.p.id">\
             <div class="prod-no">{{ it.p.productNo }}</div>\
             <div class="grow"><div class="title">{{ it.p.customerName }}</div><div class="sub">{{ it.p.detail }} · {{ dueLabel(it.p.due) }} · ครบกำหนด {{ fmtDate(it.p.endDate) }}</div></div>\
             <span v-html="statusBadge(it.p)"></span>\
           </div>\
         </div>\
+        <ProductDetail v-if="selectedProductId" :product-id="selectedProductId" in-modal @close="selectedProductId = null" />\
       </div>'
   }
 
@@ -869,7 +870,7 @@
 
   var Products = {
     data: function () {
-      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null }
+      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null, detailProductId: null }
     },
     computed: {
       customerRisks: function () {
@@ -955,7 +956,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>\
             ไม่พบสินค้า\
           </div>\
-          <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="$go(\'product/\' + p.id)" :data-testid="\'card-product-\' + p.id">\
+          <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="detailProductId = p.id" :data-testid="\'card-product-\' + p.id">\
             <div class="prod-no">{{ p.productNo }}</div>\
             <div class="grow">\
               <div class="title">{{ p.customerName }}</div>\
@@ -976,6 +977,7 @@
         </div>\
         <ProductForm v-if="showForm" :product="editProduct" @close="showForm = false" @saved="editProduct = null" />\
         <ProductRecordDialog v-if="recordProduct" :product="recordProduct" :statements="statementsFor(recordProduct)" @close="recordProduct = null" />\
+        <ProductDetail v-if="detailProductId" :product-id="detailProductId" in-modal @close="detailProductId = null" />\
       </div>'
   }
 
@@ -1117,12 +1119,17 @@
   /* ---------- รายละเอียดสินค้า ---------- */
 
   var ProductDetail = {
+    props: {
+      productId: { type: String, default: '' },
+      inModal: { type: Boolean, default: false }
+    },
+    emits: ['close'],
     data: function () {
       return { store: store, op: null, showEditForm: false, voidTarget: null, busy: false, voidRequestId: genId() }
     },
     computed: {
       p: function () {
-        var id = store.route.id
+        var id = this.productId || store.route.id
         if (!store.data) return null
         var out = null
         store.data.products.forEach(function (x) { if (x.id === id) out = x })
@@ -1176,10 +1183,12 @@
       }
     },
     template: '\
-      <div v-if="p">\
-        <button class="btn ghost sm mb-4" @click="$go(\'products\')">← กลับรายการสินค้า</button>\
+      <div v-if="p" :class="inModal ? \'modal-mask product-detail-mask\' : \'\'" @click.self="inModal && $emit(\'close\')">\
+        <div :class="inModal ? \'modal product-detail-dialog\' : \'\'" :role="inModal ? \'dialog\' : null" :aria-modal="inModal ? \'true\' : null" :aria-label="inModal ? \'รายละเอียดสินค้าเลขที่ \' + p.productNo : null">\
+        <button v-if="!inModal" class="btn ghost sm mb-4" @click="$go(\'products\')">← กลับรายการสินค้า</button>\
         <div class="row spread">\
           <h2 class="page-title" style="margin:0">สินค้าเลขที่ {{ p.productNo }} <span v-html="statusBadge(p)"></span></h2>\
+          <button v-if="inModal" class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด">✕</button>\
         </div>\
         <p class="page-sub" style="margin-top:8px">{{ typeOf(p.typeId) }} · {{ dueLabel(p.due) }}</p>\
         <div class="card">\
@@ -1234,6 +1243,7 @@
             <button class="btn danger" :disabled="busy" @click="doVoid">กลับรายการ</button>\
           </div>\
         </Modal>\
+        </div>\
       </div>\
       <div v-else class="empty">ไม่พบสินค้านี้ <a href="#/products">กลับรายการสินค้า</a></div>'
   }

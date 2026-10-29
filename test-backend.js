@@ -238,12 +238,12 @@ eq('ต้นคืน 1,200', voidRes.product.price, 1200)
 eq('ดอกคืน 60', voidRes.product.interest, 60)
 eq('closeStatus ล้างแล้ว', voidRes.product.closeStatus, '')
 
-// 15) รายงานช่วงวันนี้: เงินเข้า = (ไถ่ 1200+60) + (ดอก 50) + (ลดต้น 300) ส่วนเงินออก = จ่ายต้น 1000 + เพิ่มต้น 500
-//     (รายการไถ่ถอนถูกกลับรายการ → นับเฉพาะ reversal ที่ติดลบ: -1200/-60)
+// 15) รายงานช่วงวันนี้: รายการไถ่ถอนและรายการกลับหักล้างกัน เหลือเงินเข้า 50 + 300
+//     ส่วนเงินออก = จ่ายต้น 1000 + เพิ่มต้น 500
 const report = G.route_({ action: 'report.range', token: token, data: { start: TODAY, end: TODAY } })
-eq('รายงาน: cashIn = 50 + 300 - 1260 = -910', report.summary.cashIn, 50 + 300 + (-1200) + (-60))
+eq('รายงาน: cashIn = 50 + 300 (ไถ่ถอนและกลับรายการหักล้างกัน)', report.summary.cashIn, 350)
 eq('รายงาน: cashOut = 1000 + 500', report.summary.cashOut, 1500)
-eq('รายงาน: profit = 50 - 60 (รวมกลับรายการไถ่ถอน)', report.summary.profit, -10)
+eq('รายงาน: profit = 50 (ไถ่ถอนและกลับรายการหักล้างกัน)', report.summary.profit, 50)
 
 // 16) บัญชีร้าน: ห้ามกรอกขาออกขาเข้าพร้อมกัน
 eq('บัญชี: both-sides ปฏิเสธ', G.route_({ action: 'accounting.add', token: token, requestId: 'rq-acc-x', data: { title: 'ค่าไฟ', income: 100, pay: 100 } }), { ok: false, error: 'both-sides' })

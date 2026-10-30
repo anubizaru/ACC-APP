@@ -763,8 +763,9 @@
           var start = dateParse(this.form.startDate)
           if (!start || dateFmt(start) !== this.form.startDate) e.startDate = 'กรุณาระบุวันที่รับให้ถูกต้อง'
           if (Number(this.form.due) !== 0) {
-            var end = dateParse(this.form.endDate)
-            if (!end || dateFmt(end) !== this.form.endDate) e.endDate = 'กรุณาระบุวันครบกำหนดให้ถูกต้อง'
+            var endDate = this.isEdit ? this.form.endDate : calEndDate(Number(this.form.due), this.form.startDate)
+            var end = dateParse(endDate)
+            if (!end || dateFmt(end) !== endDate) e.endDate = 'กรุณาระบุวันครบกำหนดให้ถูกต้อง'
           }
         }
         this.errs = e
@@ -935,6 +936,15 @@
         if (!store.data) return Object.create(null)
         return customerRiskIndex(store.data.products, store.data.statements)
       },
+      principalSummary: function () {
+        var summary = { total: 0, count: 0 }
+        this.list.forEach(function (product) {
+          if (Number(product.status) !== 1) return
+          summary.total += Number(product.price) || 0
+          summary.count += 1
+        })
+        return summary
+      },
       list: function () {
         if (!store.data) return []
         var self = this
@@ -1010,6 +1020,10 @@
           <button class="btn ghost sm" @click="toggleSort(\'due\')" :aria-pressed="sortBy === \'due\'" data-testid="button-sort-due">{{ sortBy === \'due\' ? (sortDirection === \'asc\' ? \'วันครบกำหนด ↑\' : \'วันครบกำหนด ↓\') : \'เรียงตามวันครบกำหนด\' }}</button>\
           <button class="btn ghost sm" @click="toggleSort(\'productNo\')" :aria-pressed="sortBy === \'productNo\'" data-testid="button-sort-product-no">{{ sortBy === \'productNo\' ? (sortDirection === \'asc\' ? \'เลขที่สินค้า ↑\' : \'เลขที่สินค้า ↓\') : \'เรียงตามเลขที่สินค้า\' }}</button>\
         </div>\
+        <div class="mb-4" style="font-size:var(--text-sm);color:var(--color-text-muted);text-align:right" data-testid="products-principal-summary">\
+          เงินต้นคงเหลือ <b style="color:var(--color-gold);font-size:var(--text-base)">{{ fmtMoney(principalSummary.total) }} ฿</b>\
+          <span style="font-size:var(--text-xs)">({{ principalSummary.count }} รายการที่ยังเปิดอยู่)</span>\
+        </div>\
         <div class="card">\
           <div v-if="list.length === 0" class="empty">\
             <FlatIcon name="box" />\
@@ -1049,8 +1063,8 @@
       var p = this.product
       var overdue = getCountInterest(p.startDate, p.endDate, Number(p.due))
       var defAmount = 0
-      if (this.op === 'interest') defAmount = Number(p.interest)
-      if (this.op === 'redeem') defAmount = overdue * Number(p.interest) + Number(p.interest)
+      if (this.op === 'interest') defAmount = Math.round(Number(p.interest))
+      if (this.op === 'redeem') defAmount = Math.round(overdue * Number(p.interest) + Number(p.interest))
       return {
         store: store,
         amount: defAmount,
@@ -1183,7 +1197,7 @@
     },
     emits: ['close'],
     data: function () {
-      return { store: store, op: null, showEditForm: false, voidTarget: null, busy: false, voidRequestId: genId() }
+      return { store: store, op: null, showEditForm: false }
     },
     computed: {
       p: function () {
@@ -1200,7 +1214,16 @@
         out.sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1 })
         return out
       },
-      isAdmin: function () { return store.user && store.user.role === 'admin' }
+      statementTotals: function () {
+        return this.statements.reduce(function (totals, statement) {
+          totals.cashIn += cashInOf(statement)
+          totals.cashOut += Number(statement.pay) || 0
+          return totals
+        }, { cashIn: 0, cashOut: 0 })
+      },
+      remainingTotal: function () {
+        return this.statementTotals.cashIn - this.statementTotals.cashOut
+      }
     },
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge, typeLabel: typeLabel, typeOf: typeOf,
@@ -1225,26 +1248,12 @@
         if (!id || id.length < 13) return id || '—'
         return id.slice(0, 1) + '-' + id.slice(1, 5) + '-' + id.slice(5, 10) + '-' + id.slice(10, 12) + '-' + id.slice(12)
       },
-      cashInOf: cashInOf,
-      doVoid: async function () {
-        var self = this
-        this.busy = true
-        var res = await call('statement.void', { id: this.voidTarget.id }, this.voidRequestId + '-' + this.voidTarget.id)
-        this.busy = false
-        if (res && res.ok) {
-          snack('กลับรายการเรียบร้อย')
-          await refresh()
-        } else {
-          snack('กลับรายการไม่สำเร็จ (' + ((res && res.error) || '') + ')', true)
-        }
-        this.voidTarget = null
-      }
+      cashInOf: cashInOf
     },
     template: '\
       <div v-if="p" :class="inModal ? \'modal-mask product-detail-mask\' : \'\'" @click.self="inModal && $emit(\'close\')">\
         <div :class="inModal ? \'modal product-detail-dialog\' : \'\'" :role="inModal ? \'dialog\' : null" :aria-modal="inModal ? \'true\' : null" :aria-label="inModal ? \'รายละเอียดสินค้าเลขที่ \' + p.productNo : null">\
         <div :class="inModal ? \'product-detail-header\' : \'\'">\
-          <button v-if="!inModal" class="btn ghost sm mb-4" @click="$go(\'products\')">← กลับรายการสินค้า</button>\
           <div class="row spread">\
             <h2 class="page-title" style="margin:0">สินค้าเลขที่ {{ p.productNo }} <span v-html="statusBadge(p)"></span></h2>\
             <button v-if="inModal" class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด">✕</button>\
@@ -1276,10 +1285,13 @@
           </div>\
         </div>\
         <div class="card">\
-          <div class="card-title">ประวัติรายการ</div>\
+          <div class="card-title">\
+            <span>ประวัติรายการ</span>\
+            <span style="font-size:var(--text-sm);color:var(--color-success);white-space:nowrap">คงเหลือทั้งหมด <b>{{ fmtMoney(remainingTotal) }} บาท</b></span>\
+          </div>\
           <div class="tbl-wrap">\
             <table class="tbl">\
-              <thead><tr><th>วันที่</th><th>รายการ</th><th class="num">รับเข้า</th><th class="num">จ่ายออก</th><th class="num">กำไร</th><th></th></tr></thead>\
+              <thead><tr><th>วันที่</th><th>รายการ</th><th class="num">รับเข้า</th><th class="num">จ่ายออก</th><th class="num">กำไร</th></tr></thead>\
               <tbody>\
                 <tr v-for="s in statements" :key="s.id">\
                   <td>{{ fmtDate(s.date) }}</td>\
@@ -1287,9 +1299,6 @@
                   <td class="num">{{ cashIn(s) }}</td>\
                   <td class="num">{{ payOf(s) }}</td>\
                   <td class="num">{{ fmtMoney(s.profit) }}</td>\
-                  <td class="right">\
-                    <button v-if="isAdmin && !s.void && s.type !== \'new\'" class="btn ghost sm" @click="voidTarget = s">กลับรายการ</button>\
-                  </td>\
                 </tr>\
               </tbody>\
             </table>\
@@ -1298,16 +1307,9 @@
         </div>\
         <FinanceDialog v-if="op" :product="p" :op="op" @close="op = null" />\
         <ProductForm v-if="showEditForm" :product="p" @close="showEditForm = false" />\
-        <Modal v-if="voidTarget" title="ยืนยันกลับรายการ" @close="voidTarget = null">\
-          <p style="font-size:var(--text-sm)">จะกลับรายการ "{{ typeLabel(voidTarget.type) }}" วันที่ {{ fmtDate(voidTarget.date) }} และคืนสถานะสินค้าก่อนรายการนั้นหรือไม่</p>\
-          <div class="modal-actions">\
-            <button class="btn ghost" @click="voidTarget = null">ยกเลิก</button>\
-            <button class="btn danger" :disabled="busy" @click="doVoid">กลับรายการ</button>\
-          </div>\
-        </Modal>\
         </div>\
       </div>\
-      <div v-else class="empty">ไม่พบสินค้านี้ <a href="#/products">กลับรายการสินค้า</a></div>'
+      <div v-else class="empty">ไม่พบสินค้านี้</div>'
   }
 
   /* ---------- บัญชีร้าน ---------- */
@@ -1316,10 +1318,14 @@
     data: function () {
       return {
         store: store,
+        selectedMonth: todayStr().slice(0, 7),
         form: { date: todayStr(), title: '', side: 'out', amount: '' },
         show: false,
         busy: false,
-        requestId: genId()
+        requestId: genId(),
+        deleteTarget: null,
+        deleteBusy: false,
+        deleteRequestId: ''
       }
     },
     computed: {
@@ -1328,6 +1334,20 @@
         var out = store.data.accounting.slice()
         out.sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : (a.createdAt < b.createdAt ? 1 : -1)) })
         return out
+      },
+      monthList: function () {
+        var month = this.selectedMonth
+        return this.list.filter(function (entry) { return String(entry.date).slice(0, 7) === month })
+      },
+      monthTotals: function () {
+        return this.monthList.reduce(function (totals, entry) {
+          totals.income += Number(entry.income) || 0
+          totals.expense += Number(entry.pay) || 0
+          return totals
+        }, { income: 0, expense: 0 })
+      },
+      monthBalance: function () {
+        return this.monthTotals.income - this.monthTotals.expense
       },
       isAdmin: function () { return store.user && store.user.role === 'admin' }
     },
@@ -1357,10 +1377,22 @@
           snack('บันทึกไม่สำเร็จ (' + ((res && res.error) || '') + ')', true)
         }
       },
-      doVoid: async function (a) {
-        var res = await call('accounting.void', { id: a.id }, genId())
-        if (res && res.ok) { snack('กลับรายการเรียบร้อย'); await refresh() }
-        else snack('กลับรายการไม่สำเร็จ (' + ((res && res.error) || '') + ')', true)
+      confirmDelete: function (entry) {
+        this.deleteTarget = entry
+        this.deleteRequestId = genId()
+      },
+      doDelete: async function () {
+        if (!this.deleteTarget) return
+        this.deleteBusy = true
+        var res = await call('accounting.delete', { id: this.deleteTarget.id }, this.deleteRequestId)
+        this.deleteBusy = false
+        if (res && res.ok) {
+          snack('ลบรายการบัญชีร้านแล้ว')
+          this.deleteTarget = null
+          await refresh()
+        } else {
+          snack('ลบรายการไม่สำเร็จ (' + ((res && res.error) || '') + ')', true)
+        }
       }
     },
     template: '\
@@ -1371,17 +1403,23 @@
         </div>\
         <p class="page-sub">รายรับ-รายจ่ายของร้านที่ไม่เกี่ยวกับสินค้า (ค่าไฟ ค่าเช่า ฯลฯ)</p>\
         <div class="card">\
-          <div v-if="list.length === 0" class="empty">ยังไม่มีรายการ</div>\
+          <div class="field" style="max-width:240px"><label for="ac-month">เลือกเดือน</label><input id="ac-month" class="input" type="month" v-model="selectedMonth" data-testid="input-accounting-month" /></div>\
+          <div class="grid grid-3 mb-4">\
+            <div class="card stat in"><div class="stat-label">รายรับเดือนนี้</div><div class="stat-value">{{ fmtMoney(monthTotals.income) }} ฿</div></div>\
+            <div class="card stat out"><div class="stat-label">รายจ่ายเดือนนี้</div><div class="stat-value">{{ fmtMoney(monthTotals.expense) }} ฿</div></div>\
+            <div class="card stat profit"><div class="stat-label">คงเหลือเดือนนี้</div><div class="stat-value">{{ fmtMoney(monthBalance) }} ฿</div></div>\
+          </div>\
+          <div v-if="monthList.length === 0" class="empty">ไม่มีรายการในเดือนนี้</div>\
           <div class="tbl-wrap">\
             <table class="tbl">\
               <thead><tr><th>วันที่</th><th>รายการ</th><th class="num">รายรับ</th><th class="num">รายจ่าย</th><th></th></tr></thead>\
               <tbody>\
-                <tr v-for="a in list" :key="a.id">\
+                <tr v-for="a in monthList" :key="a.id">\
                   <td>{{ fmtDate(a.date) }}</td>\
                   <td>{{ a.title }}<span v-if="a.void" class="badge pink" style="margin-left:6px">ยกเลิก</span></td>\
                   <td class="num" style="color:var(--color-success)">{{ inAmt(a) }}</td>\
                   <td class="num" style="color:var(--color-danger)">{{ payAmt(a) }}</td>\
-                  <td class="right"><button v-if="isAdmin && !a.void" class="btn ghost sm" @click="doVoid(a)">กลับรายการ</button></td>\
+                  <td class="right"><button v-if="isAdmin && !a.void && !a.voidOf" class="btn danger sm" @click="confirmDelete(a)">ลบรายการ</button></td>\
                 </tr>\
               </tbody>\
             </table>\
@@ -1403,6 +1441,14 @@
               <button type="submit" class="btn" :disabled="busy">บันทึก</button>\
             </div>\
           </form>\
+        </Modal>\
+        <Modal v-if="deleteTarget" title="ยืนยันลบรายการ" @close="deleteTarget = null">\
+          <p style="font-size:var(--text-sm)">ต้องการลบรายการ "{{ deleteTarget.title }}" วันที่ {{ fmtDate(deleteTarget.date) }} จำนวน {{ fmtMoney(Number(deleteTarget.income) || Number(deleteTarget.pay)) }} บาทใช่หรือไม่</p>\
+          <p class="hint" style="margin-top:8px">เมื่อลบแล้วจะไม่สามารถกู้คืนได้ รายการที่มีประวัติกลับรายการไม่สามารถลบได้</p>\
+          <div class="modal-actions">\
+            <button class="btn ghost" :disabled="deleteBusy" @click="deleteTarget = null">ยกเลิก</button>\
+            <button class="btn danger" :disabled="deleteBusy" @click="doDelete">ลบรายการ</button>\
+          </div>\
         </Modal>\
       </div>'
   }
@@ -1436,7 +1482,7 @@
       }
     },
     methods: {
-      fmtDate: fmtDate, fmtMoney: fmtMoney,
+      fmtDate: fmtDate, fmtMoney: fmtMoney, todayStr: todayStr,
       saveCred: async function () {
         if (!this.credForm.name.trim()) { snack('กรอกชื่อเจ้าหนี้', true); return }
         this.busy = true
@@ -1451,7 +1497,8 @@
       },
       saveMove: async function () {
         var amt = Number(this.moveForm.amount)
-        if (!(amt > 0)) { snack('กรอกจำนวนเงิน', true); return }
+        if (!Number.isInteger(amt) || !(amt > 0)) { snack('กรอกจำนวนเต็มบาทที่มากกว่า 0', true); return }
+        if (this.moveForm.side === 'refund' && amt > this.moveFor.bal) { snack('จำนวนชำระต้องไม่เกินยอดคงค้าง', true); return }
         this.busy = true
         var res = await call('creditorMove.add', {
           creditorId: this.moveFor.c.id,
@@ -1465,7 +1512,10 @@
           snack('บันทึกรายการเจ้าหนี้แล้ว')
           this.moveFor = null
           await refresh()
-        } else snack('บันทึกไม่สำเร็จ', true)
+        } else {
+          var message = res && res.error === 'refund-exceeds-balance' ? 'จำนวนชำระต้องไม่เกินยอดคงค้าง' : 'บันทึกไม่สำเร็จ'
+          snack(message, true)
+        }
       }
     },
     template: '\
@@ -1483,7 +1533,7 @@
               <div class="sub">ล่าสุด {{ it.latest ? fmtDate(it.latest) : \'—\' }}</div>\
             </div>\
             <div class="right"><b style="font-size:var(--text-base)">{{ fmtMoney(it.bal) }} ฿</b><div class="muted" style="font-size:var(--text-xs)">คงค้าง</div></div>\
-            <button class="btn sm" @click="moveFor = it; moveForm = { date: todayStr(), side: \'refund\', amount: \'\', note: \'\' }" :data-testid="\'button-move-\' + it.c.id">บันทึกชำระ</button>\
+            <button class="btn sm" @click="moveFor = it; moveForm = { date: todayStr(), side: it.bal > 0 ? \'refund\' : \'borrow\', amount: \'\', note: \'\' }" :data-testid="\'button-move-\' + it.c.id">บันทึกชำระ</button>\
           </div>\
         </div>\
         <Modal v-if="showCred" title="เพิ่มเจ้าหนี้" @close="showCred = false">\
@@ -1505,7 +1555,7 @@
                 <button type="button" class="chip" :class="{active: moveForm.side===\'borrow\'}" @click="moveForm.side=\'borrow\'">ยืมเพิ่ม</button>\
               </div>\
             </div>\
-            <div class="field"><label for="mv-amount">จำนวนเงิน (บาท)</label><input id="mv-amount" class="input" type="number" min="1" step="1" v-model.number="moveForm.amount" /></div>\
+            <div class="field"><label for="mv-amount">จำนวนเงิน (บาท)</label><input id="mv-amount" class="input" type="number" min="1" step="1" :max="moveForm.side === \'refund\' ? moveFor.bal : null" v-model.number="moveForm.amount" /></div>\
             <div class="field"><label for="mv-note">หมายเหตุ</label><input id="mv-note" class="input" v-model="moveForm.note" /></div>\
             <div class="modal-actions">\
               <button type="button" class="btn ghost" @click="moveFor = null">ยกเลิก</button>\
@@ -1556,6 +1606,7 @@
       drawChart: async function () {
         var el = this.$refs.canvas
         if (!el || !this.result) return
+        var result = this.result
         var ChartLib
         try {
           ChartLib = await loadChartJs()
@@ -1563,7 +1614,7 @@
           snack('โหลดกราฟไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', true)
           return
         }
-        if (!el.isConnected || this.$refs.canvas !== el) return
+        if (!el.isConnected || this.$refs.canvas !== el || this.result !== result) return
         if (this.chart) this.chart.destroy()
         // รวมรายรับ/จ่ายต่อวัน (สินค้า + บัญชีร้าน)
         var byDay = {}
@@ -1591,7 +1642,7 @@
             ]
           },
           options: {
-            responsive: true, maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false, animation: false,
             scales: { x: { stacked: true }, y: { stacked: false } },
             plugins: { legend: { labels: { font: { family: 'Anuphan' } } } }
           }
@@ -1610,10 +1661,11 @@
         var csv = '\uFEFF' + rows.map(function (r) { return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"' }).join(',') }).join('\r\n')
         var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
         var a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
+        var downloadUrl = URL.createObjectURL(blob)
+        a.href = downloadUrl
         a.download = 'report-' + this.start + '_' + this.end + '.csv'
         a.click()
-        URL.revokeObjectURL(a.href)
+        setTimeout(function () { URL.revokeObjectURL(downloadUrl) }, 1000)
       }
     },
     mounted: function () { this.run() },
@@ -1701,13 +1753,15 @@
       fmtDate: fmtDate,
       active: function (u) { return Number(u.active) === 1 },
       saveType: async function () {
-        if (!this.typeForm.name.trim()) return
+        if (!this.typeForm.name.trim()) { snack('กรุณากรอกชื่อประเภทสินค้า', true); return }
         var res = await call('type.save', this.typeForm, genId())
         if (res && res.ok) { snack('บันทึกประเภทสินค้าแล้ว'); this.typeForm = { name: '' }; await refresh() }
         else snack('บันทึกไม่สำเร็จ', true)
       },
       saveDue: async function () {
-        if (!this.dueForm.title.trim()) return
+        var due = Number(this.dueForm.due)
+        if (!this.dueForm.title.trim()) { snack('กรุณากรอกชื่อกำหนดชำระ', true); return }
+        if (!Number.isInteger(due) || due < 0) { snack('จำนวนวันต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป', true); return }
         var res = await call('due.save', this.dueForm, genId())
         if (res && res.ok) { snack('บันทึกกำหนดชำระแล้ว'); await refresh() }
         else snack('บันทึกไม่สำเร็จ', true)
@@ -1763,7 +1817,7 @@
             <div class="grow"><span class="title">{{ d.title }}</span> <span class="muted" style="font-size:var(--text-xs)">{{ d.due }} {{ d.unit === \'month\' ? \'เดือน\' : d.unit === \'day\' ? \'วัน\' : \'\' }}</span></div>\
           </div>\
           <form class="row mt-4" @submit.prevent="saveDue">\
-            <input class="input" style="max-width:120px" type="number" v-model.number="dueForm.due" aria-label="จำนวนวัน" />\
+            <input class="input" style="max-width:120px" type="number" min="0" step="1" v-model.number="dueForm.due" aria-label="จำนวนวัน" />\
             <input class="input" style="max-width:200px" v-model="dueForm.title" placeholder="ชื่อเช่น ราย 15 วัน" aria-label="ชื่อกำหนดชำระ" />\
             <button class="btn sm" type="submit">เพิ่ม</button>\
           </form>\
@@ -1903,7 +1957,7 @@
               <h3>ขั้นตอน 1: สร้างฐานข้อมูล D1</h3>\
               <p>ติดตั้ง Wrangler และเข้าสู่ระบบ Cloudflare ก่อน (ทำครั้งเดียว) จากนั้นเปิด PowerShell ที่โฟลเดอร์โครงการ</p>\
               <pre class="code-box">npm install --global wrangler\nwrangler login</pre>\
-              <label class="field"><span>ชื่อฐานข้อมูล</span><input class="input" v-model.trim="d1DatabaseName" maxlength="63" pattern="[A-Za-z0-9_-]+" autocomplete="off" /></label>\
+              <label class="field"><span>ชื่อฐานข้อมูล</span><input class="input" v-model.trim="d1DatabaseName" maxlength="63" pattern="[A-Za-z0-9_\\-]+" autocomplete="off" /></label>\
               <p v-if="!validD1DatabaseName()" class="err">ใช้ได้เฉพาะ A-Z, a-z, 0-9, _ และ - ความยาวไม่เกิน 63 ตัว</p>\
               <pre class="code-box">{{ d1CreateCommand }}</pre>\
               <button type="button" class="btn sm outline" :disabled="!validD1DatabaseName()" @click="copyD1(d1CreateCommand, \'คำสั่งสร้าง D1 \')">คัดลอกคำสั่งสร้าง D1</button>\

@@ -41,7 +41,7 @@ function calInterest(price) {
   // ต้นฉบับ: a = price*5/100 ; ถ้า a%10 != 0 ให้ a += 5
   var a = (price * 5) / 100
   if (a % 10 !== 0) a += 5
-  return a
+  return Math.round(a)
 }
 
 /* ---------- วันครบกำหนด (ตรงต้นฉบับ: calEndDate) ---------- */

@@ -161,6 +161,10 @@ const token = loginRes.token
 // 6) ไม่มี token → ปฏิเสธ
 eq('ไม่มี token ถูกปฏิเสธ', G.route_({ action: 'bootstrap' }), { ok: false, error: 'auth' })
 
+const customDueRes = G.route_({ action: 'due.save', token: token, data: { due: 20, title: 'ราย 20 วัน' } })
+okTrue('เพิ่มกำหนดชำระแบบกำหนดเอง', customDueRes.ok === true)
+eq('ปฏิเสธกำหนดชำระที่ไม่ใช่จำนวนเต็ม', G.route_({ action: 'due.save', token: token, data: { due: 2.5, title: 'ทดสอบ' } }), { ok: false, error: 'invalid-due' })
+
 // 7) เพิ่มสินค้าใหม่ (รับจำ 1,000 บาท ดอก 50 งวดรายเดือน)
 const createRes = G.route_({
   action: 'product.create', token: token, requestId: 'rq-create-1',
@@ -189,10 +193,11 @@ eq('มี statement 1 รายการ (ไม่ซ้ำ)', boot1.statement
 
 const customNoRes = G.route_({
   action: 'product.create', token: token, requestId: 'rq-create-custom-no',
-  data: { productNo: 20, customerName: 'ลูกค้ากำหนดเลขเอง', detail: 'แหวน', price: 500, interest: 25, due: 30, startDate: '2026-01-01', typeId: 'ทอง-ประเภท' }
+  data: { productNo: 20, customerName: 'ลูกค้ากำหนดเลขเอง', detail: 'แหวน', price: 500, interest: 25, due: 20, startDate: '2026-01-01', typeId: 'ทอง-ประเภท' }
 })
 okTrue('กำหนดเลขที่สินค้าเองได้', customNoRes.ok === true)
 eq('เลขที่สินค้าตามที่กำหนด', customNoRes.product.productNo, 20)
+eq('สร้างสินค้าด้วยกำหนดชำระแบบกำหนดเอง', customNoRes.product.endDate, '2026-01-21')
 eq('เลขที่สินค้าซ้ำถูกปฏิเสธ', G.route_({
   action: 'product.create', token: token, requestId: 'rq-create-duplicate-no',
   data: { productNo: 20, customerName: 'ลูกค้าซ้ำ', detail: 'แหวน', price: 500, interest: 25, due: 30, startDate: TODAY, typeId: 'ทอง-ประเภท' }
@@ -251,12 +256,25 @@ const accRes = G.route_({ action: 'accounting.add', token: token, requestId: 'rq
 okTrue('เพิ่มบัญชีร้านสำเร็จ', accRes.ok === true)
 const report2 = G.route_({ action: 'report.range', token: token, data: { start: TODAY, end: TODAY } })
 eq('รายงาน: ค่าไฟจ่ายออก 350', report2.summary.accOut, 350)
+const accDelete = G.route_({ action: 'accounting.delete', token: token, requestId: 'rq-acc-delete-1', data: { id: accRes.entry.id } })
+okTrue('ผู้ดูแลลบรายการบัญชีได้', accDelete.ok === true)
+okTrue('ลบรายการบัญชีซ้ำด้วย requestId เดิมไม่ทำซ้ำ', G.route_({ action: 'accounting.delete', token: token, requestId: 'rq-acc-delete-1', data: { id: accRes.entry.id } }).replayed === true)
+okTrue('รายการที่ลบไม่อยู่ใน bootstrap', !G.route_({ action: 'bootstrap', token: token }).accounting.some(a => a.id === accRes.entry.id))
+
+const linkedAcc = G.route_({ action: 'accounting.add', token: token, requestId: 'rq-acc-linked', data: { title: 'รายการที่มีประวัติ', pay: 75 } })
+const linkedAccVoid = G.route_({ action: 'accounting.void', token: token, requestId: 'rq-acc-linked-void', data: { id: linkedAcc.entry.id } })
+okTrue('กลับรายการบัญชีสร้างรายการคู่สำเร็จ', linkedAccVoid.ok === true)
+eq('ป้องกันการลบรายการบัญชีที่มีคู่กลับรายการ', G.route_({ action: 'accounting.delete', token: token, requestId: 'rq-acc-delete-linked', data: { id: linkedAcc.entry.id } }), { ok: false, error: 'linked-entry' })
+eq('ป้องกันการลบรายการกลับรายการที่มีต้นทาง', G.route_({ action: 'accounting.delete', token: token, requestId: 'rq-acc-delete-reversal', data: { id: linkedAccVoid.reverse.id } }), { ok: false, error: 'linked-entry' })
 
 // 17) เจ้าหนี้
 const credRes = G.route_({ action: 'creditor.save', token: token, requestId: 'rq-cred-1', data: { name: 'เจ้าของร้านทอง' } })
 okTrue('เพิ่มเจ้าหนี้สำเร็จ', credRes.ok === true)
+eq('ปฏิเสธชำระเกินยอดคงค้าง', G.route_({ action: 'creditorMove.add', token: token, requestId: 'rq-mv-over-1', data: { creditorId: credRes.creditor.id, refund: 100 } }), { ok: false, error: 'refund-exceeds-balance' })
 const mvRes = G.route_({ action: 'creditorMove.add', token: token, requestId: 'rq-mv-1', data: { creditorId: credRes.creditor.id, borrow: 5000 } })
 okTrue('ยืมเจ้าหนี้ 5,000 สำเร็จ', mvRes.ok === true)
+okTrue('ชำระคืนภายในยอดคงค้างได้', G.route_({ action: 'creditorMove.add', token: token, requestId: 'rq-mv-refund', data: { creditorId: credRes.creditor.id, refund: 1500 } }).ok === true)
+eq('ปฏิเสธชำระเกินยอดคงค้างหลังหักชำระ', G.route_({ action: 'creditorMove.add', token: token, requestId: 'rq-mv-over-2', data: { creditorId: credRes.creditor.id, refund: 4000 } }), { ok: false, error: 'refund-exceeds-balance' })
 
 // 18) ผู้ใช้: admin สร้าง staff
 const staffRes = G.route_({ action: 'user.save', token: token, requestId: 'rq-user-1', data: { name: 'พนักงานใหม่', email: 'staff@shop.test', password: 'secret123', role: 'staff' } })
@@ -264,6 +282,7 @@ okTrue('สร้าง staff สำเร็จ', staffRes.ok === true)
 const staffLogin = G.route_({ action: 'login', data: { email: 'staff@shop.test', password: 'secret123' } })
 okTrue('staff login ได้', staffLogin.ok === true)
 const staffToken = staffLogin.token
+eq('staff ห้ามลบรายการบัญชี', G.route_({ action: 'accounting.delete', token: staffToken, requestId: 'rq-acc-delete-staff', data: { id: accRes.entry.id } }), { ok: false, error: 'forbidden' })
 // staff ทำรายการได้
 const st2 = G.route_({ action: 'product.create', token: staffToken, requestId: 'rq-create-2', data: { customerName: 'ลูกค้า 2', detail: 'แหวน', price: 500, interest: 30, due: 15, typeId: 'ทอง-ประเภท', startDate: TODAY } })
 okTrue('staff สร้างสินค้าได้', st2.ok === true)

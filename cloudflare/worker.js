@@ -504,7 +504,7 @@ function calInterest(price) {
   // ต้นฉบับ: a = price*5/100 ; ถ้า a%10 != 0 ให้ a += 5
   var a = (price * 5) / 100
   if (a % 10 !== 0) a += 5
-  return a
+  return Math.round(a)
 }
 
 /* ---------- วันครบกำหนด (ตรงต้นฉบับ: calEndDate) ---------- */
@@ -984,6 +984,7 @@ function route_(req) {
   if (action === 'statement.void') return statementVoid_(data, user, req.requestId)
   if (action === 'accounting.add') return accountingAdd_(data, user, req.requestId)
   if (action === 'accounting.void') return accountingVoid_(data, user, req.requestId)
+  if (action === 'accounting.delete') return accountingDelete_(data, user, req.requestId)
   if (action === 'creditor.save') return creditorSave_(data, user, req.requestId)
   if (action === 'creditorMove.add') return creditorMoveAdd_(data, user, req.requestId)
   if (action === 'report.range') return reportRange_(data, user)
@@ -1173,7 +1174,12 @@ function validateProduct_(data, isCreate) {
     out.interest = toIntBaht(data.interest)
     if (out.interest === null || out.interest < 0) return { error: 'interest' }
     out.due = Number(data.due)
-    if ([0, 10, 15, 30].indexOf(out.due) < 0) return { error: 'due' }
+    var dueOptions = readAll_(TAB.DUE)
+    var validDue = false
+    for (var i = 0; i < dueOptions.length; i++) {
+      if (Number(dueOptions[i].due) === out.due) { validDue = true; break }
+    }
+    if (!isFinite(out.due) || Math.floor(out.due) !== out.due || !validDue) return { error: 'due' }
     out.startDate = String(data.startDate || todayStr_()).slice(0, 10)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(out.startDate)) return { error: 'startDate' }
     out.endDate = calEndDate(out.due, out.startDate)
@@ -1539,6 +1545,27 @@ function accountingVoid_(data, user, requestId) {
   })
 }
 
+function accountingDelete_(data, user, requestId) {
+  return withIdempotency_(requestId, user, 'accounting.delete', function (rid, existingOp) {
+    if (existingOp) return existingResult_(existingOp)
+    if (!requireAdmin_(user)) return { ok: false, error: 'forbidden' }
+    var rows = readAll_(TAB.ACCOUNTING)
+    var entry = null
+    for (var i = 0; i < rows.length; i++) if (rows[i].id === data.id) { entry = rows[i]; break }
+    if (!entry) return { ok: false, error: 'not-found' }
+    var isVoided = String(entry.void).toLowerCase() === 'true'
+    var hasLinkedEntry = !!entry.voidOf
+    for (var j = 0; j < rows.length; j++) {
+      if (rows[j].voidOf === entry.id) { hasLinkedEntry = true; break }
+    }
+    if (isVoided || hasLinkedEntry) return { ok: false, error: 'linked-entry' }
+    ss_().getSheetByName(TAB.ACCOUNTING).deleteRow(entry._row)
+    var result = { ok: true }
+    commitOp_(rid, entry.id, result)
+    return result
+  })
+}
+
 /* ---------- เจ้าหนี้ ---------- */
 
 function creditorSave_(data, user, requestId) {
@@ -1581,6 +1608,14 @@ function creditorMoveAdd_(data, user, requestId) {
     if (borrow === null || refund === null) return { ok: false, error: 'invalid-amount' }
     if (borrow > 0 && refund > 0) return { ok: false, error: 'both-sides' }
     if (borrow === 0 && refund === 0) return { ok: false, error: 'invalid-amount' }
+    if (refund > 0) {
+      var moves = readAll_(TAB.CREDITOR_MOVES)
+      var outstanding = 0
+      for (var j = 0; j < moves.length; j++) {
+        if (moves[j].creditorId === found.id) outstanding += Number(moves[j].borrow) - Number(moves[j].refund)
+      }
+      if (refund > outstanding) return { ok: false, error: 'refund-exceeds-balance' }
+    }
 
     var m = {
       id: uuid_(), creditorId: found.id, date: date, borrow: borrow, refund: refund,
@@ -1672,7 +1707,7 @@ function typeSave_(data, user) {
 
 function dueSave_(data, user) {
   var due = Number(data.due)
-  if (isNaN(due) || due < 0) return { ok: false, error: 'invalid-due' }
+  if (!isFinite(due) || due < 0 || Math.floor(due) !== due) return { ok: false, error: 'invalid-due' }
   var row = {
     id: data.id || 'due-' + due, due: due, unit: String(data.unit || 'day'),
     title: String(data.title || '').trim(), color: String(data.color || 'grey')

@@ -29,6 +29,7 @@ eq('price 2000 -> 100', L.calInterest(2000), 100)
 eq('price 500 -> 25+5=30', L.calInterest(500), 30)
 eq('price 3000 -> 150', L.calInterest(3000), 150)
 eq('price 11000 -> 550 (เป็นสิบเต็มอยู่แล้ว)', L.calInterest(11000), 550)
+eq('price 550 -> ค่าบริการจำนวนเต็ม 33', L.calInterest(550), 33)
 
 console.log('== calEndDate ==')
 eq('due 30 = +1 เดือน (31 ม.ค. -> 28 ก.พ. หรือ 29 ปีอธิกสุรทิน)', L.calEndDate(30, '2024-01-31'), '2024-02-29')

@@ -280,6 +280,7 @@ function route_(req) {
   if (action === 'creditorMove.add') return creditorMoveAdd_(data, user, req.requestId)
   if (action === 'report.range') return reportRange_(data, user)
   if (action === 'type.save') return typeSave_(data, user)
+  if (action === 'type.delete') return typeDelete_(data, user, req.requestId)
   if (action === 'due.save') return dueSave_(data, user)
   if (action === 'user.save') return userSave_(data, user, req.requestId)
   if (action === 'user.password') return userPassword_(data, user)
@@ -623,9 +624,10 @@ function productDelete_(data, user, requestId) {
     for (var i = 0; i < rows.length; i++) if (rows[i].id === data.id) { p = rows[i]; break }
     if (!p) return { ok: false, error: 'not-found' }
     var sts = readAll_(TAB.STATEMENTS)
-    var hasSt = false
-    for (var j = 0; j < sts.length; j++) if (sts[j].productId === p.id) { hasSt = true; break }
-    if (hasSt) return { ok: false, error: 'has-statements' }
+    var statementSheet = ss_().getSheetByName(TAB.STATEMENTS)
+    for (var j = sts.length - 1; j >= 0; j--) {
+      if (sts[j].productId === p.id) statementSheet.deleteRow(sts[j]._row)
+    }
     var sh = ss_().getSheetByName(TAB.PRODUCTS)
     sh.deleteRow(p._row)
     var result = { ok: true }
@@ -977,6 +979,7 @@ function reportRange_(data, user) {
 /* ---------- ตั้งค่า ---------- */
 
 function typeSave_(data, user) {
+  if (!requireAdmin_(user)) return { ok: false, error: 'forbidden' }
   var name = String(data.name || '').trim()
   if (!name) return { ok: false, error: 'invalid-name' }
   if (data.id) {
@@ -996,7 +999,34 @@ function typeSave_(data, user) {
   return { ok: true, type: clean_(t) }
 }
 
+function typeDelete_(data, user, requestId) {
+  return withIdempotency_(requestId, user, 'type.delete', function (rid, existingOp) {
+    if (existingOp) return existingResult_(existingOp)
+    var id = String(data.id || '')
+    if (!id) return { ok: false, error: 'invalid-id' }
+
+    var rows = readAll_(TAB.TYPES)
+    var type = null
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].id === id) { type = rows[i]; break }
+    }
+    if (!type) return { ok: false, error: 'not-found' }
+    if (rows.length <= 1) return { ok: false, error: 'last-type' }
+
+    var products = readAll_(TAB.PRODUCTS)
+    for (var j = 0; j < products.length; j++) {
+      if (String(products[j].typeId) === id) return { ok: false, error: 'has-products' }
+    }
+
+    ss_().getSheetByName(TAB.TYPES).deleteRow(type._row)
+    var result = { ok: true }
+    commitOp_(rid, id, result)
+    return result
+  })
+}
+
 function dueSave_(data, user) {
+  if (!requireAdmin_(user)) return { ok: false, error: 'forbidden' }
   var due = Number(data.due)
   if (!isFinite(due) || due < 0 || Math.floor(due) !== due) return { ok: false, error: 'invalid-due' }
   var row = {

@@ -160,6 +160,15 @@ const token = loginRes.token
 
 // 6) ไม่มี token → ปฏิเสธ
 eq('ไม่มี token ถูกปฏิเสธ', G.route_({ action: 'bootstrap' }), { ok: false, error: 'auth' })
+eq('ไม่มี token ลบประเภทสินค้าไม่ได้', G.route_({ action: 'type.delete', data: { id: 'type-id' } }), { ok: false, error: 'auth' })
+
+const removableType = G.route_({ action: 'type.save', token: token, data: { name: 'ทดสอบลบ' } }).type
+const deleteTypeRes = G.route_({ action: 'type.delete', token: token, requestId: 'rq-type-delete-1', data: { id: removableType.id } })
+eq('ลบประเภทสินค้าที่ไม่มีสินค้าใช้งานได้', deleteTypeRes, { ok: true })
+okTrue('ลบประเภทสินค้า requestId เดิมซ้ำได้อย่างปลอดภัย', G.route_({ action: 'type.delete', token: token, requestId: 'rq-type-delete-1', data: { id: removableType.id } }).replayed === true)
+
+const usedType = G.route_({ action: 'type.save', token: token, data: { name: 'ประเภทที่มีสินค้า' } }).type
+eq('ลบประเภทสินค้าที่ไม่มีอยู่ไม่ได้', G.route_({ action: 'type.delete', token: token, data: { id: 'missing-type' } }), { ok: false, error: 'not-found' })
 
 const customDueRes = G.route_({ action: 'due.save', token: token, data: { due: 20, title: 'ราย 20 วัน' } })
 okTrue('เพิ่มกำหนดชำระแบบกำหนดเอง', customDueRes.ok === true)
@@ -168,7 +177,7 @@ eq('ปฏิเสธกำหนดชำระที่ไม่ใช่จ�
 // 7) เพิ่มสินค้าใหม่ (รับจำ 1,000 บาท ดอก 50 งวดรายเดือน)
 const createRes = G.route_({
   action: 'product.create', token: token, requestId: 'rq-create-1',
-  data: { customerName: 'สมชาย ใจดี', customerIdCard: '0123456789012', typeId: 'ทอง-ประเภท', detail: 'สร้อยคอทอง 1 สล้อ', price: 1000, interest: 50, due: 30, startDate: TODAY, desc: 'ของเก่า' }
+  data: { customerName: 'สมชาย ใจดี', customerIdCard: '0123456789012', typeId: usedType.id, detail: 'สร้อยคอทอง 1 สล้อ', price: 1000, interest: 50, due: 30, startDate: TODAY, desc: 'ของเก่า' }
 })
 okTrue('สร้างสินค้าสำเร็จ', createRes.ok === true)
 eq('เลขรายการแรก = 1', createRes.product.productNo, 1)
@@ -190,6 +199,7 @@ okTrue('requestId ซ้ำถูกเล่นซ้ำ (replayed)', replay.re
 const boot1 = G.route_({ action: 'bootstrap', token: token })
 eq('มีสินค้า 1 รายการ (ไม่ซ้ำ)', boot1.products.length, 1)
 eq('มี statement 1 รายการ (ไม่ซ้ำ)', boot1.statements.length, 1)
+eq('ป้องกันลบประเภทสินค้าที่มีสินค้าใช้งาน', G.route_({ action: 'type.delete', token: token, requestId: 'rq-type-delete-used', data: { id: usedType.id } }), { ok: false, error: 'has-products' })
 
 const customNoRes = G.route_({
   action: 'product.create', token: token, requestId: 'rq-create-custom-no',
@@ -287,6 +297,11 @@ eq('staff ห้ามลบรายการบัญชี', G.route_({ actio
 const st2 = G.route_({ action: 'product.create', token: staffToken, requestId: 'rq-create-2', data: { customerName: 'ลูกค้า 2', detail: 'แหวน', price: 500, interest: 30, due: 15, typeId: 'ทอง-ประเภท', startDate: TODAY } })
 okTrue('staff สร้างสินค้าได้', st2.ok === true)
 eq('เลขอัตโนมัติต่อจากเลขสูงสุด', st2.product.productNo, 21)
+const deleteHistoryRes = G.route_({ action: 'finance.op', token: staffToken, requestId: 'rq-delete-history-1', data: { id: st2.product.id, op: 'interest', amount: 30, date: TODAY } })
+okTrue('เพิ่มประวัติสินค้าสำหรับทดสอบลบ', deleteHistoryRes.ok === true)
+eq('staff จัดการประเภทสินค้าไม่ได้', G.route_({ action: 'type.save', token: staffToken, data: { name: 'staff type' } }), { ok: false, error: 'forbidden' })
+eq('staff จัดการกำหนดชำระไม่ได้', G.route_({ action: 'due.save', token: staffToken, data: { due: 25, title: 'staff due' } }), { ok: false, error: 'forbidden' })
+eq('staff ลบสินค้าไม่ได้', G.route_({ action: 'product.delete', token: staffToken, requestId: 'rq-del-staff', data: { id: st2.product.id } }), { ok: false, error: 'forbidden' })
 // staff ห้ามจัดการผู้ใช้
 eq('staff ห้ามจัดการผู้ใช้', G.route_({ action: 'user.save', token: staffToken, requestId: 'rq-user-2', data: { name: 'x', email: 'x@x.test', password: '123456' } }), { ok: false, error: 'forbidden' })
 // staff ห้ามกลับรายการ
@@ -307,8 +322,12 @@ const disRes = G.route_({ action: 'user.save', token: token, requestId: 'rq-user
 okTrue('ปิดบัญชี staff สำเร็จ', disRes.ok === true)
 eq('token ของผู้ถูกปิดบัญชีใช้ไม่ได้', G.route_({ action: 'bootstrap', token: reLogin.token }), { ok: false, error: 'auth' })
 
-// 22) ลบสินค้าที่มีรายการแล้วไม่ได้
-eq('ลบสินค้าที่มีรายการไม่ได้', G.route_({ action: 'product.delete', token: token, requestId: 'rq-del-1', data: { id: st2.product.id } }), { ok: false, error: 'has-statements' })
+// 22) admin ลบสินค้าและประวัติทั้งหมดได้
+const productDelete = G.route_({ action: 'product.delete', token: token, requestId: 'rq-del-1', data: { id: st2.product.id } })
+eq('ผู้ดูแลลบสินค้าที่มีประวัติได้', productDelete, { ok: true })
+okTrue('ลบสินค้าซ้ำด้วย requestId เดิมไม่ทำซ้ำ', G.route_({ action: 'product.delete', token: token, requestId: 'rq-del-1', data: { id: st2.product.id } }).replayed === true)
+eq('ลบสินค้าออกจาก bootstrap แล้ว', G.route_({ action: 'bootstrap', token: token }).products.some(product => product.id === st2.product.id), false)
+eq('ลบประวัติสินค้าทั้งหมดออกจาก bootstrap แล้ว', G.route_({ action: 'bootstrap', token: token }).statements.some(statement => statement.productId === st2.product.id), false)
 
 // 23) doPost ครบวงจร (JSON เข้า-ออก)
 const http = G.doPost({ postData: { contents: JSON.stringify({ action: 'ping' }) } })
@@ -319,6 +338,11 @@ const boot2 = G.route_({ action: 'bootstrap', token: token })
 const redeemed = boot2.statements.filter(s => s.type === 'redeem')
 eq('มีรายการไถ่ถอน 2 แถว (ต้นฉบับ + กลับรายการ)', redeemed.length, 2)
 okTrue('ต้นฉบับถูกมาร์ก void', String(redeemed[0].void) === 'TRUE')
+
+boot2.types.filter(type => type.id !== usedType.id).forEach((type, index) => {
+  G.route_({ action: 'type.delete', token: token, requestId: 'rq-type-delete-unused-' + index, data: { id: type.id } })
+})
+eq('ป้องกันการลบประเภทสินค้าสุดท้าย', G.route_({ action: 'type.delete', token: token, requestId: 'rq-type-delete-last', data: { id: usedType.id } }), { ok: false, error: 'last-type' })
 
 // 25) แก้ข้อมูลหลักของสินค้าและซิงก์กับรายการรับสินค้าแรก
 const editableRes = G.route_({

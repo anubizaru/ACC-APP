@@ -359,6 +359,7 @@
         <path v-else-if="name===\'help\'" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 17.8a7.8 7.8 0 1 1 0-15.6 7.8 7.8 0 0 1 0 15.6Zm-.1-13.2c-2.1 0-3.5 1.2-3.7 3.1h2.2c.1-.8.6-1.2 1.5-1.2.8 0 1.3.4 1.3 1.1 0 .6-.3.9-1.2 1.5-1.3.8-1.9 1.6-1.9 3.1v.4h2.2v-.3c0-.9.3-1.3 1.4-2 1.2-.8 1.8-1.6 1.8-2.9 0-1.7-1.4-2.8-3.6-2.8Zm-1.1 9.1v2.2h2.4v-2.2h-2.4Z"/>\
         <path v-else-if="name===\'logout\'" d="M10 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-9v-2h9V5h-9V3ZM3 11h10l-3.5-3.5L11 7l5 5-5 5-1.5-1.5L13 13H3v-2Z"/>\
         <path v-else-if="name===\'eye\'" d="M12 5c-5.2 0-9.2 4.2-10.7 6.2a1.3 1.3 0 0 0 0 1.6C2.8 14.8 6.8 19 12 19s9.2-4.2 10.7-6.2a1.3 1.3 0 0 0 0-1.6C21.2 9.2 17.2 5 12 5Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>\
+        <path v-else-if="name===\'trash\'" d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm3 0v8h2v-8h-2Z"/>\
         <path v-else-if="name===\'close\'" d="m5.4 4 6.6 6.6L18.6 4 20 5.4 13.4 12l6.6 6.6-1.4 1.4-6.6-6.6L5.4 20 4 18.6 10.6 12 4 5.4 5.4 4Z"/>\
         <path v-else d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2c0-3 3-2.8 3-5a2 2 0 0 0-4 0H8a4 4 0 0 1 8 0c0 3-3 3-3 5Z"/>\
       </svg>'
@@ -509,7 +510,8 @@
   var Nav = {
     data: function () { return { store: store } },
     computed: {
-      view: function () { return store.route.view === 'product' ? 'products' : store.route.view }
+      view: function () { return store.route.view === 'product' ? 'products' : store.route.view },
+      isAdmin: function () { return store.user && store.user.role === 'admin' }
     },
     methods: { logout: logout },
     template: '\
@@ -525,7 +527,7 @@
             <a href="#/accounting" :class="{active: view===\'accounting\'}"><FlatIcon name="wallet" />บัญชีร้าน</a>\
             <a href="#/creditors" :class="{active: view===\'creditors\'}"><FlatIcon name="users" />เจ้าหนี้</a>\
             <a href="#/reports" :class="{active: view===\'reports\'}"><FlatIcon name="chart" />รายงาน</a>\
-            <a href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" />ตั้งค่า</a>\
+            <a v-if="isAdmin" href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" />ตั้งค่า</a>\
             <a href="#/guide"><FlatIcon name="book" />คู่มือเชื่อมต่อ</a>\
           </nav>\
           <div class="side-foot">\
@@ -547,7 +549,7 @@
           <a href="#/accounting" :class="{active: view===\'accounting\'}"><FlatIcon name="wallet" /><span class="nav-label">บัญชี</span></a>\
           <a href="#/creditors" :class="{active: view===\'creditors\'}"><FlatIcon name="users" /><span class="nav-label">เจ้าหนี้</span></a>\
           <a href="#/reports" :class="{active: view===\'reports\'}"><FlatIcon name="chart" /><span class="nav-label">รายงาน</span></a>\
-          <a href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" /><span class="nav-label">ตั้งค่า</span></a>\
+          <a v-if="isAdmin" href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" /><span class="nav-label">ตั้งค่า</span></a>\
         </nav>\
       </div>'
   }
@@ -929,9 +931,10 @@
 
   var Products = {
     data: function () {
-      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null, detailProductId: null }
+      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null, detailProductId: null, deletingProductId: '' }
     },
     computed: {
+      isAdmin: function () { return store.user && store.user.role === 'admin' },
       customerRisks: function () {
         if (!store.data) return Object.create(null)
         return customerRiskIndex(store.data.products, store.data.statements)
@@ -987,6 +990,21 @@
         if (!store.data) return []
         return store.data.statements.filter(function (statement) { return statement.productId === product.id })
       },
+      deleteProduct: async function (product) {
+        if (this.deletingProductId || !window.confirm('ยืนยันลบสินค้าเลขที่ ' + product.productNo + ' (' + product.detail + ') และประวัติการทำรายการทั้งหมดหรือไม่? ข้อมูลที่ลบแล้วไม่สามารถกู้คืนได้')) return
+        this.deletingProductId = product.id
+        var res = await call('product.delete', { id: product.id }, genId())
+        this.deletingProductId = ''
+        if (res && res.ok) {
+          if (this.recordProduct && this.recordProduct.id === product.id) this.recordProduct = null
+          if (this.detailProductId === product.id) this.detailProductId = null
+          snack('ลบสินค้าและประวัติการทำรายการแล้ว')
+          await refresh()
+          return
+        }
+        var messages = { forbidden: 'เฉพาะผู้ดูแลระบบเท่านั้นที่ลบสินค้าได้', 'not-found': 'ไม่พบรายการสินค้าที่ต้องการลบ' }
+        snack(messages[res && res.error] || 'ลบสินค้าไม่สำเร็จ', true)
+      },
       toggleSort: function (field) {
         if (this.sortBy !== field) {
           this.sortBy = field
@@ -1030,7 +1048,7 @@
             ไม่พบสินค้า\
           </div>\
           <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="detailProductId = p.id" :data-testid="\'card-product-\' + p.id">\
-            <div class="prod-no" :style="dueColorStyle(p.due)">{{ p.productNo }}</div>\
+            <button type="button" class="prod-no" :style="dueColorStyle(p.due)" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-product-record-\' + p.id">{{ p.productNo }}</button>\
             <div class="grow">\
               <div class="title">{{ p.customerName }}</div>\
               <div class="sub">{{ p.detail }} · {{ dueLabel(p.due) }} · ครบกำหนด {{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}</div>\
@@ -1045,7 +1063,7 @@
               </div>\
             </div>\
             <span class="product-status" v-html="statusBadge(p)"></span>\
-            <button class="btn ghost sm product-record-action" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-record-details-\' + p.id"><FlatIcon name="eye" /></button>\
+            <button v-if="isAdmin" class="btn ghost sm product-delete-action" @click.stop="deleteProduct(p)" :disabled="!!deletingProductId" :aria-label="\'ลบสินค้าเลขที่ \' + p.productNo + \' พร้อมประวัติทั้งหมด\'" title="ลบสินค้าและประวัติทั้งหมด" :data-testid="\'button-delete-product-\' + p.id"><FlatIcon name="trash" /></button>\
           </div>\
         </div>\
         <ProductForm v-if="showForm" :product="editProduct" @close="showForm = false" @saved="editProduct = null" />\
@@ -1679,11 +1697,13 @@
       <div>\
         <h2 class="page-title">รายงาน</h2>\
         <div class="card mb-4">\
-          <div class="row">\
+          <div class="row report-filters">\
             <div class="field" style="margin:0"><label for="rp-start">จากวันที่</label><input id="rp-start" class="input" type="date" v-model="start" /></div>\
             <div class="field" style="margin:0"><label for="rp-end">ถึงวันที่</label><input id="rp-end" class="input" type="date" v-model="end" /></div>\
-            <button class="btn" @click="run" :disabled="busy" data-testid="button-run-report">{{ busy ? "กำลังดึงข้อมูล..." : "ดูรายงาน" }}</button>\
-            <button class="btn outline" @click="exportCsv" v-if="result">ส่งออก CSV</button>\
+            <div class="report-filter-actions">\
+              <button class="btn" @click="run" :disabled="busy" data-testid="button-run-report">{{ busy ? "กำลังดึงข้อมูล..." : "ดูรายงาน" }}</button>\
+              <button class="btn outline" @click="exportCsv" v-if="result">ส่งออก CSV</button>\
+            </div>\
           </div>\
         </div>\
         <div v-if="result">\
@@ -1742,7 +1762,8 @@
         dueForm: { due: 30, unit: 'day', title: '', color: 'green' },
         userForm: { name: '', email: '', password: '', role: 'staff' },
         passForm: { current: '', next: '' },
-        busy: false
+        busy: false,
+        deletingTypeId: ''
       }
     },
     computed: {
@@ -1757,6 +1778,23 @@
         var res = await call('type.save', this.typeForm, genId())
         if (res && res.ok) { snack('บันทึกประเภทสินค้าแล้ว'); this.typeForm = { name: '' }; await refresh() }
         else snack('บันทึกไม่สำเร็จ', true)
+      },
+      deleteType: async function (type) {
+        if (this.deletingTypeId || !window.confirm('ยืนยันลบประเภทสินค้า "' + type.name + '" หรือไม่?')) return
+        this.deletingTypeId = type.id
+        var res = await call('type.delete', { id: type.id }, genId())
+        this.deletingTypeId = ''
+        if (res && res.ok) {
+          snack('ลบประเภทสินค้าแล้ว')
+          await refresh()
+          return
+        }
+        var messages = {
+          'has-products': 'ลบไม่ได้ เพราะมีสินค้าใช้ประเภทนี้อยู่',
+          'last-type': 'ต้องมีประเภทสินค้าอย่างน้อย 1 ประเภท',
+          'not-found': 'ไม่พบประเภทสินค้าที่ต้องการลบ'
+        }
+        snack(messages[res && res.error] || 'ลบประเภทสินค้าไม่สำเร็จ', true)
       },
       saveDue: async function () {
         var due = Number(this.dueForm.due)
@@ -1805,7 +1843,10 @@
         </div>\
         <div v-if="tab===\'types\'" class="card">\
           <div class="card-title">ประเภทสินค้า</div>\
-          <div v-for="t in store.data.types" :key="t.id" class="list-row"><div class="grow title">{{ t.name }}</div></div>\
+          <div v-for="t in store.data.types" :key="t.id" class="list-row">\
+            <button class="btn danger sm" @click="deleteType(t)" :disabled="!!deletingTypeId || store.data.types.length <= 1" :aria-label="\'ลบประเภท \' + t.name" title="ลบประเภทสินค้า"><FlatIcon name="trash" /></button>\
+            <div class="grow title">{{ t.name }}</div>\
+          </div>\
           <form class="row mt-4" @submit.prevent="saveType">\
             <input class="input" style="max-width:240px" v-model="typeForm.name" placeholder="ชื่อประเภทใหม่" aria-label="ชื่อประเภทใหม่" />\
             <button class="btn sm" type="submit">เพิ่ม</button>\
@@ -2072,6 +2113,7 @@
     computed: {
       view: function () {
         if (store.route.view === 'product') return 'ProductDetail'
+        if (store.route.view === 'settings' && (!store.user || store.user.role !== 'admin')) return 'Dashboard'
         var map = { dashboard: 'Dashboard', products: 'Products', accounting: 'Accounting', creditors: 'Creditors', reports: 'Reports', settings: 'Settings', guide: 'Guide' }
         return map[store.route.view] || 'Dashboard'
       }

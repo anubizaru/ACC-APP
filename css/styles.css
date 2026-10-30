@@ -334,8 +334,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
   grid-template-columns: 46px minmax(0, 1fr) 200px 120px 43px;
   gap: var(--space-2);
 }
+.product-list-row > .prod-no { grid-column: 1; }
+.product-list-row > .grow { grid-column: 2; }
+.product-list-row > .product-customer-risk { grid-column: 3; }
+.product-list-row > .product-status { grid-column: 4; }
+.product-list-row > .product-delete-action { grid-column: 5; }
 .product-status { width: 120px; }
-.product-record-action { width: 43px; justify-content: center; }
+.product-delete-action { width: 43px; justify-content: center; }
+.btn.ghost.product-delete-action { color: var(--color-danger); }
+.btn.ghost.product-delete-action:hover { background: var(--color-danger-soft); color: var(--color-danger); }
 .list-row:last-child { border-bottom: none; }
 .list-row .grow { flex: 1; min-width: 0; }
 .list-row .title { font-weight: 600; font-size: var(--text-sm); }
@@ -348,16 +355,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
   border-radius: var(--radius-md);
   background: var(--color-primary-highlight); color: var(--color-primary);
   display: grid; place-items: center; font-weight: 700; font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
+  font-family: inherit; font-variant-numeric: tabular-nums;
 }
 @media (max-width: 900px) {
   .product-list-row { grid-template-columns: 46px minmax(0, 1fr) auto 43px; }
   .product-list-row > .grow { grid-column: 2; grid-row: 1; }
   .product-list-row > .product-customer-risk { grid-column: 2; grid-row: 2; }
   .product-list-row > .product-status { grid-column: 3; grid-row: 1; width: auto; min-width: 0; justify-self: end; }
-  .product-list-row > .product-record-action { grid-column: 4; grid-row: 2; }
+  .product-list-row > .product-delete-action { grid-column: 4; grid-row: 2; }
 }
-
 /* modal */
 .modal-mask {
   position: fixed; inset: 0; z-index: 100;
@@ -582,6 +588,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .mt-2 { margin-top: var(--space-2); } .mt-4 { margin-top: var(--space-4); } .mt-6 { margin-top: var(--space-6); }
 .mb-4 { margin-bottom: var(--space-4); }
 .row { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+.row.report-filters { align-items: flex-end; }
+.report-filter-actions { display: flex; align-items: center; gap: var(--space-3); }
 .spread { justify-content: space-between; }
 .chip-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .chip {

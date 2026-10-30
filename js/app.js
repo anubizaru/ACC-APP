@@ -291,6 +291,19 @@
     for (var i = 0; i < list.length; i++) if (Number(list[i].due) === Number(due)) return list[i].title
     return due === 0 ? 'ขายสินค้า' : due + ' วัน'
   }
+  function dueColorStyle(due) {
+    var list = store.data ? store.data.due : []
+    for (var i = 0; i < list.length; i++) {
+      if (Number(list[i].due) === Number(due)) {
+        var hue = (25 + i * 137.508) % 360
+        return {
+          backgroundColor: 'hsl(' + hue + ', 50%, 88%)',
+          color: 'hsl(' + hue + ', 45%, 30%)'
+        }
+      }
+    }
+    return null
+  }
   function typeOf(id) {
     var list = store.data ? store.data.types : []
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name
@@ -603,7 +616,7 @@
       }
     },
     methods: {
-      fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge
+      fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, dueColorStyle: dueColorStyle, statusBadge: statusBadge
     },
     mounted: function () { refresh() },
     template: '\
@@ -628,7 +641,7 @@
           <div class="card-title">ใกล้ครบกำหนด / เกินกำหนด <a href="#/products" style="font-size:var(--text-xs)">ดูทั้งหมด →</a></div>\
           <div v-if="dueSoon.length === 0" class="empty">ไม่มีรายการใกล้ครบกำหนด</div>\
           <div v-for="it in dueSoon" :key="it.p.id" class="list-row clickable" @click="selectedProductId = it.p.id">\
-            <div class="prod-no">{{ it.p.productNo }}</div>\
+            <div class="prod-no" :style="dueColorStyle(it.p.due)">{{ it.p.productNo }}</div>\
             <div class="grow"><div class="title">{{ it.p.customerName }}</div><div class="sub">{{ it.p.detail }} · {{ dueLabel(it.p.due) }} · ครบกำหนด {{ fmtDate(it.p.endDate) }}</div></div>\
             <span v-html="statusBadge(it.p)"></span>\
           </div>\
@@ -955,6 +968,7 @@
     },
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, statusBadge: statusBadge,
+      dueColorStyle: dueColorStyle,
       customerRiskFor: function (product) {
         var name = String(product.customerName || '').trim().toLowerCase()
         return this.customerRisks[name] || null
@@ -1002,7 +1016,7 @@
             ไม่พบสินค้า\
           </div>\
           <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="detailProductId = p.id" :data-testid="\'card-product-\' + p.id">\
-            <div class="prod-no">{{ p.productNo }}</div>\
+            <div class="prod-no" :style="dueColorStyle(p.due)">{{ p.productNo }}</div>\
             <div class="grow">\
               <div class="title">{{ p.customerName }}</div>\
               <div class="sub">{{ p.detail }} · {{ dueLabel(p.due) }} · ครบกำหนด {{ p.endDate && p.endDate !== \'0\' ? fmtDate(p.endDate) : \'—\' }}</div>\

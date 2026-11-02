@@ -340,7 +340,7 @@
    * ========================================================= */
 
   var Snackbar = {
-    template: '<div v-if="store.snack.show" class="snackbar" :class="{err: store.snack.err}">{{ store.snack.text }}</div>',
+    template: '<div v-if="store.snack.show" class="snackbar" :class="{err: store.snack.err}" :role="store.snack.err ? \'alert\' : \'status\'" :aria-live="store.snack.err ? \'assertive\' : \'polite\'">{{ store.snack.text }}</div>',
     data: function () { return { store: store } }
   }
 
@@ -361,6 +361,7 @@
         <path v-else-if="name===\'eye\'" d="M12 5c-5.2 0-9.2 4.2-10.7 6.2a1.3 1.3 0 0 0 0 1.6C2.8 14.8 6.8 19 12 19s9.2-4.2 10.7-6.2a1.3 1.3 0 0 0 0-1.6C21.2 9.2 17.2 5 12 5Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>\
         <path v-else-if="name===\'trash\'" d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm3 0v8h2v-8h-2Z"/>\
         <path v-else-if="name===\'close\'" d="m5.4 4 6.6 6.6L18.6 4 20 5.4 13.4 12l6.6 6.6-1.4 1.4-6.6-6.6L5.4 20 4 18.6 10.6 12 4 5.4 5.4 4Z"/>\
+        <path v-else-if="name===\'plus\'" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/>\
         <path v-else d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2c0-3 3-2.8 3-5a2 2 0 0 0-4 0H8a4 4 0 0 1 8 0c0 3-3 3-3 5Z"/>\
       </svg>'
   }
@@ -369,8 +370,8 @@
     props: ['title'],
     emits: ['close'],
     template: '\
-      <div class="modal-mask" @click.self="$emit(\'close\')" role="dialog" :aria-label="title">\
-        <div class="modal">\
+      <div class="modal-mask" @click.self="$emit(\'close\')">\
+        <div class="modal" role="dialog" aria-modal="true" :aria-label="title">\
           <div class="modal-header"><h3>{{ title }}</h3>\
             <button class="icon-btn" style="background:var(--color-surface-offset);color:var(--color-text)" @click="$emit(\'close\')" aria-label="ปิด"><FlatIcon name="close" /></button>\
           </div>\
@@ -522,13 +523,13 @@
             <div><div class="brand-name">ร้านรับจำนำ</div><div class="brand-sub">{{ store.mode === "demo" ? "โหมดทดลอง" : (store.backendProvider === "cloudflare" ? "Cloudflare D1" : "Google Sheets") }}</div></div>\
           </div>\
           <nav>\
-            <a href="#/dashboard" :class="{active: view===\'dashboard\'}"><FlatIcon name="home" />หน้าหลัก</a>\
-            <a href="#/products" :class="{active: view===\'products\'}"><FlatIcon name="box" />สินค้า</a>\
-            <a href="#/accounting" :class="{active: view===\'accounting\'}"><FlatIcon name="wallet" />บัญชีร้าน</a>\
-            <a href="#/creditors" :class="{active: view===\'creditors\'}"><FlatIcon name="users" />เจ้าหนี้</a>\
-            <a href="#/reports" :class="{active: view===\'reports\'}"><FlatIcon name="chart" />รายงาน</a>\
-            <a v-if="isAdmin" href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" />ตั้งค่า</a>\
-            <a href="#/guide"><FlatIcon name="book" />คู่มือเชื่อมต่อ</a>\
+            <a href="#/dashboard" :class="{active: view===\'dashboard\'}" :aria-current="view===\'dashboard\' ? \'page\' : null"><FlatIcon name="home" />หน้าหลัก</a>\
+            <a href="#/products" :class="{active: view===\'products\'}" :aria-current="view===\'products\' ? \'page\' : null"><FlatIcon name="box" />สินค้า</a>\
+            <a href="#/accounting" :class="{active: view===\'accounting\'}" :aria-current="view===\'accounting\' ? \'page\' : null"><FlatIcon name="wallet" />บัญชีร้าน</a>\
+            <a href="#/creditors" :class="{active: view===\'creditors\'}" :aria-current="view===\'creditors\' ? \'page\' : null"><FlatIcon name="users" />เจ้าหนี้</a>\
+            <a href="#/reports" :class="{active: view===\'reports\'}" :aria-current="view===\'reports\' ? \'page\' : null"><FlatIcon name="chart" />รายงาน</a>\
+            <a v-if="isAdmin" href="#/settings" :class="{active: view===\'settings\'}" :aria-current="view===\'settings\' ? \'page\' : null"><FlatIcon name="settings" />ตั้งค่า</a>\
+            <a href="#/guide" :class="{active: view===\'guide\'}" :aria-current="view===\'guide\' ? \'page\' : null"><FlatIcon name="book" />คู่มือเชื่อมต่อ</a>\
           </nav>\
           <div class="side-foot">\
             <div>{{ store.user ? store.user.name : "" }}</div>\
@@ -544,12 +545,12 @@
           </div>\
         </div>\
         <nav class="bottom-nav">\
-          <a href="#/dashboard" :class="{active: view===\'dashboard\'}"><FlatIcon name="home" /><span class="nav-label">หน้าหลัก</span></a>\
-          <a href="#/products" :class="{active: view===\'products\'}"><FlatIcon name="box" /><span class="nav-label">สินค้า</span></a>\
-          <a href="#/accounting" :class="{active: view===\'accounting\'}"><FlatIcon name="wallet" /><span class="nav-label">บัญชี</span></a>\
-          <a href="#/creditors" :class="{active: view===\'creditors\'}"><FlatIcon name="users" /><span class="nav-label">เจ้าหนี้</span></a>\
-          <a href="#/reports" :class="{active: view===\'reports\'}"><FlatIcon name="chart" /><span class="nav-label">รายงาน</span></a>\
-          <a v-if="isAdmin" href="#/settings" :class="{active: view===\'settings\'}"><FlatIcon name="settings" /><span class="nav-label">ตั้งค่า</span></a>\
+          <a href="#/dashboard" :class="{active: view===\'dashboard\'}" :aria-current="view===\'dashboard\' ? \'page\' : null"><FlatIcon name="home" /><span class="nav-label">หน้าหลัก</span></a>\
+          <a href="#/products" :class="{active: view===\'products\'}" :aria-current="view===\'products\' ? \'page\' : null"><FlatIcon name="box" /><span class="nav-label">สินค้า</span></a>\
+          <a href="#/accounting" :class="{active: view===\'accounting\'}" :aria-current="view===\'accounting\' ? \'page\' : null"><FlatIcon name="wallet" /><span class="nav-label">บัญชี</span></a>\
+          <a href="#/creditors" :class="{active: view===\'creditors\'}" :aria-current="view===\'creditors\' ? \'page\' : null"><FlatIcon name="users" /><span class="nav-label">เจ้าหนี้</span></a>\
+          <a href="#/reports" :class="{active: view===\'reports\'}" :aria-current="view===\'reports\' ? \'page\' : null"><FlatIcon name="chart" /><span class="nav-label">รายงาน</span></a>\
+          <a v-if="isAdmin" href="#/settings" :class="{active: view===\'settings\'}" :aria-current="view===\'settings\' ? \'page\' : null"><FlatIcon name="settings" /><span class="nav-label">ตั้งค่า</span></a>\
         </nav>\
       </div>'
   }
@@ -557,18 +558,44 @@
   /* ---------- หน้าหลัก ---------- */
 
   var Dashboard = {
-    data: function () { return { store: store, selectedProductId: null } },
+    data: function () { return { store: store, selectedProductId: null, selectedDate: '', showProductForm: false } },
     computed: {
       dueSoon: function () {
         if (!store.data) return []
         var out = []
         store.data.products.forEach(function (p) {
           if (Number(p.status) !== 1) return
+          if (this.selectedDate && String(p.endDate || '').slice(0, 10) !== this.selectedDate) return
           var d = daysLeft(p.endDate)
           if (d !== null && d <= 7) out.push({ p: p, d: d })
-        })
+        }, this)
         out.sort(function (a, b) { return a.d - b.d })
         return out.slice(0, 8)
+      },
+      calendarDays: function () {
+        if (!store.data) return []
+        var today = dateParse(todayStr())
+        var todayIso = dateFmt(today)
+        var firstDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay())
+        var weekdays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
+        var months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
+        return Array.from({ length: 7 }, function (_, index) {
+          var date = new Date(firstDate.getFullYear(), firstDate.getMonth(), firstDate.getDate() + index)
+          var iso = dateFmt(date)
+          var items = store.data.products.filter(function (p) {
+            return Number(p.status) === 1 && String(p.endDate || '').slice(0, 10) === iso
+          })
+          return {
+            iso: iso,
+            fullDate: fmtDate(iso),
+            weekday: weekdays[date.getDay()],
+            day: date.getDate(),
+            month: months[date.getMonth()],
+            count: items.length,
+            overdue: items.filter(function (p) { return daysLeft(p.endDate) < 0 }).length,
+            today: iso === todayIso
+          }
+        })
       },
       activeCount: function () {
         if (!store.data) return 0
@@ -618,36 +645,51 @@
       }
     },
     methods: {
-      fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, dueColorStyle: dueColorStyle, statusBadge: statusBadge
+      fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, dueColorStyle: dueColorStyle, statusBadge: statusBadge, todayStr: todayStr
     },
     mounted: function () { refresh() },
     template: '\
-      <div v-if="!store.data" style="display:grid;place-items:center;padding:80px 0"><div class="spinner"></div></div>\
-      <div v-else>\
-        <h2 class="page-title">หน้าหลัก</h2>\
-        <div class="grid grid-4 mb-4">\
-          <div class="card stat dashboard-stat"><div class="stat-label">สินค้าในระบบ</div><div class="stat-value">{{ activeCount }}</div><div class="stat-hint">รายการที่ยังเปิดอยู่</div></div>\
-          <div class="card stat profit dashboard-stat"><div class="stat-label">เงินต้นสินค้าคงเหลือทั้งหมด</div><div class="stat-value">{{ fmtMoney(principalSummary.total) }} ฿</div><div class="stat-hint">{{ principalSummary.totalCount }} รายการ</div></div>\
-          <div class="card stat out dashboard-stat"><div class="stat-label">เงินต้นสินค้าเกินกำหนด</div><div class="stat-value">{{ fmtMoney(principalSummary.overdue) }} ฿</div><div class="stat-hint">{{ principalSummary.overdueCount }} รายการ</div></div>\
-          <div class="card stat in dashboard-stat"><div class="stat-label">เงินต้นสินค้าตามกำหนด</div><div class="stat-value">{{ fmtMoney(principalSummary.onTime) }} ฿</div><div class="stat-hint">{{ principalSummary.onTimeCount }} รายการ</div></div>\
-        </div>\
-        <h3 class="card-title">เงินต้นคงเหลือตามกำหนดชำระ</h3>\
-        <div class="grid grid-4 mb-4">\
-          <div v-for="item in principalByDue" :key="item.id" class="card stat dashboard-stat">\
-            <div class="stat-label">{{ item.title }}</div>\
-            <div class="stat-value">{{ fmtMoney(item.amount) }} ฿</div>\
-            <div class="stat-hint">{{ item.count }} รายการ</div>\
+      <div v-if="!store.data" class="loading-state" role="status"><div class="spinner" aria-hidden="true"></div><span class="sr-only">กำลังโหลดข้อมูล</span></div>\
+      <div v-else class="dashboard">\
+        <header class="dashboard-header">\
+          <h2 class="page-title">งานของร้านวันนี้</h2>\
+          <div class="dashboard-toolbar">\
+            <span class="today-date">{{ fmtDate(todayStr()) }}</span>\
+            <button type="button" class="btn outline" @click="$go(\'products\')" data-testid="button-dashboard-search">ค้นหารายการ</button>\
+            <button type="button" class="btn" @click="showProductForm = true" data-testid="button-dashboard-add-product">＋ รับสินค้าใหม่</button>\
           </div>\
-        </div>\
-        <div class="card mt-4">\
-          <div class="card-title">ใกล้ครบกำหนด / เกินกำหนด <a href="#/products" style="font-size:var(--text-xs)">ดูทั้งหมด →</a></div>\
-          <div v-if="dueSoon.length === 0" class="empty">ไม่มีรายการใกล้ครบกำหนด</div>\
-          <div v-for="it in dueSoon" :key="it.p.id" class="list-row clickable" @click="selectedProductId = it.p.id">\
-            <div class="prod-no" :style="dueColorStyle(it.p.due)">{{ it.p.productNo }}</div>\
-            <div class="grow"><div class="title">{{ it.p.customerName }}</div><div class="sub">{{ it.p.detail }} · {{ dueLabel(it.p.due) }} · ครบกำหนด {{ fmtDate(it.p.endDate) }}</div></div>\
-            <span v-html="statusBadge(it.p)"></span>\
+        </header>\
+        <section class="dashboard-summary" aria-label="สรุปเงินต้นและรายการ">\
+          <div class="summary-item"><span class="stat-label">เงินต้นคงเหลือ</span><strong class="summary-value">{{ fmtMoney(principalSummary.total) }} ฿</strong><span class="stat-hint">{{ principalSummary.totalCount }} รายการที่ยังเปิดอยู่</span></div>\
+          <div class="summary-item"><span class="stat-label">เงินต้นเกินกำหนด</span><strong class="summary-value summary-overdue">{{ fmtMoney(principalSummary.overdue) }} ฿</strong><span class="stat-hint">{{ principalSummary.overdueCount }} รายการที่ควรติดตาม</span></div>\
+          <div class="summary-item"><span class="stat-label">เงินต้นตามกำหนด</span><strong class="summary-value">{{ fmtMoney(principalSummary.onTime) }} ฿</strong><span class="stat-hint">{{ principalSummary.onTimeCount }} รายการ</span></div>\
+        </section>\
+        <section class="card calendar-card" aria-labelledby="calendar-title">\
+          <div class="card-title"><div><h3 id="calendar-title">กำหนดชำระสัปดาห์นี้</h3><span class="muted">เลือกวันเพื่อกรองรายการติดตาม</span></div>\
+            <button v-if="selectedDate" type="button" class="btn ghost sm" @click="selectedDate = \'\'">แสดงทั้งหมด</button>\
           </div>\
-        </div>\
+          <div class="calendar-week" role="group" aria-label="กรองรายการตามวันครบกำหนด">\
+            <button v-for="day in calendarDays" :key="day.iso" type="button" class="calendar-day" :class="{today: day.today, selected: selectedDate === day.iso, overdue: day.overdue > 0}" :aria-pressed="selectedDate === day.iso" :aria-label="day.weekday + \' \' + day.fullDate + \', \' + day.count + \' รายการ\' + (day.overdue ? \', เกินกำหนด \' + day.overdue + \' รายการ\' : \'\')" @click="selectedDate = selectedDate === day.iso ? \'\' : day.iso">\
+              <span class="calendar-weekday">{{ day.weekday }}</span><strong>{{ day.day }}</strong><span class="calendar-month">{{ day.month }}</span>\
+              <span class="calendar-count">{{ day.count ? day.count + \' รายการ\' : \'—\' }}</span>\
+            </button>\
+          </div>\
+        </section>\
+        <section class="card follow-up-card" aria-labelledby="follow-up-title">\
+          <div class="card-title"><div><h3 id="follow-up-title">{{ selectedDate ? \'รายการตามวันที่ \' + fmtDate(selectedDate) : \'รายการที่ต้องติดตาม\' }}</h3><span class="muted">{{ selectedDate ? \'กำหนดชำระในวันที่เลือก\' : \'เกินกำหนดและครบกำหนดภายใน 7 วัน\' }}</span></div><a href=\\"#/products\\">ดูสินค้าทั้งหมด</a></div>\
+          <div v-if="dueSoon.length === 0" class="empty calendar-empty">{{ selectedDate ? \'ไม่มีรายการกำหนดชำระในวันที่เลือก\' : \'ไม่มีรายการที่ต้องติดตามใน 7 วันนี้\' }}</div>\
+          <div v-else class="follow-up-table">\
+            <div class="follow-up-row follow-up-head" aria-hidden="true"><span>เลขที่</span><span>ลูกค้า</span><span>รายการสินค้า</span><span>วันครบกำหนด</span><span class="money">เงินต้น</span></div>\
+            <button v-for="it in dueSoon" :key="it.p.id" type="button" class="follow-up-row" @click="selectedProductId = it.p.id" :aria-label="\'เปิดรายละเอียดสินค้าเลขที่ \' + it.p.productNo + \' ของ \' + it.p.customerName">\
+              <span class="follow-up-number">{{ it.p.productNo }}</span>\
+              <span class="follow-up-customer">{{ it.p.customerName }}</span>\
+              <span class="follow-up-product">{{ it.p.detail }}<small>{{ dueLabel(it.p.due) }}</small></span>\
+              <span class="follow-up-due"><span>{{ fmtDate(it.p.endDate) }}</span><span v-html="statusBadge(it.p)"></span></span>\
+              <strong class="money">{{ fmtMoney(it.p.price) }} ฿</strong>\
+            </button>\
+          </div>\
+        </section>\
+        <ProductForm v-if="showProductForm" @close="showProductForm = false" @saved="showProductForm = false" />\
         <ProductDetail v-if="selectedProductId" :product-id="selectedProductId" in-modal @close="selectedProductId = null" />\
       </div>'
   }
@@ -1021,10 +1063,12 @@
       <div>\
         <div class="row spread">\
           <div><h2 class="page-title" style="margin-bottom:8px">สินค้า</h2></div>\
-          <button class="btn" @click="showForm = true; editProduct = null" data-testid="button-add-product">+ รับสินค้าใหม่</button>\
         </div>\
         <div class="row mb-4">\
-          <input class="input" style="max-width:320px" v-model="q" placeholder="ค้นหา: ชื่อลูกค้า รายละเอียด เลขรายการ" aria-label="ค้นหาสินค้า" data-testid="input-search" />\
+          <div class="product-search-group">\
+            <button type="button" class="btn product-search-add" @click="showForm = true; editProduct = null" aria-label="รับสินค้าใหม่" title="รับสินค้าใหม่" data-testid="button-add-product"><FlatIcon name="plus" /></button>\
+            <input class="input" v-model="q" placeholder="ค้นหา: ชื่อลูกค้า รายละเอียด เลขรายการ" aria-label="ค้นหาสินค้า" data-testid="input-search" />\
+          </div>\
           <select class="input" style="max-width:200px" v-model="dueFilter" aria-label="กรองตามกำหนดชำระ" data-testid="filter-due">\
             <option value="all">ทุกกำหนดชำระ</option>\
             <option v-for="d in store.data.due" :key="d.id" :value="String(d.due)">{{ d.title }}</option>\
@@ -1655,8 +1699,8 @@
           data: {
             labels: days.map(function (d) { return d.slice(8) + '/' + d.slice(5, 7) }),
             datasets: [
-              { label: 'รับเข้า', data: inData, backgroundColor: '#2e7d4f', borderRadius: 3 },
-              { label: 'จ่ายออก', data: outData, backgroundColor: '#a63a3a', borderRadius: 3 }
+              { label: 'รับเข้า', data: inData, backgroundColor: '#416b50', borderRadius: 3 },
+              { label: 'จ่ายออก', data: outData, backgroundColor: '#a2534c', borderRadius: 3 }
             ]
           },
           options: {

@@ -7,24 +7,33 @@
 var PawnAPI = (function () {
   'use strict'
 
+  var REQUEST_TIMEOUT_MS = 15000
+
   function realApi(url) {
     return {
       demo: false,
       url: url,
       async call(action, data, requestId, token) {
         var body = JSON.stringify({ action: action, data: data || {}, requestId: requestId, token: token })
-        var res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: body,
-          redirect: 'follow'
-        })
-        if (!res.ok) throw new Error('http-' + res.status)
-        var text = await res.text()
+        var controller = new AbortController()
+        var timeout = setTimeout(function () { controller.abort() }, REQUEST_TIMEOUT_MS)
         try {
-          return JSON.parse(text)
-        } catch (err) {
-          throw new Error('bad-response')
+          var res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: body,
+            redirect: 'follow',
+            signal: controller.signal
+          })
+          if (!res.ok) throw new Error('http-' + res.status)
+          var text = await res.text()
+          try {
+            return JSON.parse(text)
+          } catch (err) {
+            throw new Error('bad-response')
+          }
+        } finally {
+          clearTimeout(timeout)
         }
       }
     }

@@ -2169,7 +2169,11 @@
       // ถ้าเคยบันทึก URL ไว้ พยายามกลับมาใช้โหมดจริง
       var savedUrl = lsGet('pawn_url')
       if (savedUrl) {
-        try { await startReal(savedUrl, lsGet('pawn_provider') || 'apps-script') } catch (e) { /* ลิงก์ใช้ไม่ได้แล้ว เริ่มใหม่ */ }
+        try {
+          await startReal(savedUrl, lsGet('pawn_provider') || 'apps-script')
+        } catch (e) {
+          snack('เชื่อมต่อฐานข้อมูลที่บันทึกไว้ไม่สำเร็จ กรุณาตรวจสอบ URL แล้วเชื่อมต่อใหม่', true)
+        }
       }
       this.booting = false
     },

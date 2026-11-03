@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS PawnAuth (
 
 CREATE INDEX IF NOT EXISTS idx_Employees_email ON Employees(email);
 CREATE INDEX IF NOT EXISTS idx_Products_productNo ON Products(productNo);
+CREATE INDEX IF NOT EXISTS idx_Products_typeId ON Products(typeId);
 CREATE INDEX IF NOT EXISTS idx_Statements_productId ON Statements(productId);
 CREATE INDEX IF NOT EXISTS idx_Statements_date ON Statements(date);
 CREATE INDEX IF NOT EXISTS idx_Accounting_date ON Accounting(date);

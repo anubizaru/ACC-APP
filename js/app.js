@@ -86,11 +86,100 @@
     snack._t = setTimeout(function () { store.snack.show = false }, 3200)
   }
 
+  function upsertById(rows, value) {
+    if (!value || !value.id) return
+    var index = rows.findIndex(function (row) { return row.id === value.id })
+    if (index < 0) rows.push(value)
+    else rows[index] = Object.assign({}, rows[index], value)
+  }
+
+  function applyCloudflareMutation(action, data, res) {
+    if (store.backendProvider !== 'cloudflare' || !store.data || !res || !res.ok || res.refreshRequired === true) return
+    var products = store.data.products
+    var statements = store.data.statements
+    var accounting = store.data.accounting
+    var invalidateCustomerRisk = false
+    if (action === 'product.create') {
+      upsertById(products, res.product)
+      upsertById(statements, res.statement)
+      invalidateCustomerRisk = true
+    } else if (action === 'product.update') {
+      upsertById(products, res.product)
+      var opening = statements.find(function (statement) {
+        return statement.productId === data.id && statement.type === 'new'
+      })
+      if (opening && res.product) {
+        Object.assign(opening, {
+          date: res.product.startDate,
+          pay: res.product.price,
+          priceAfter: res.product.price,
+          interestAfter: res.product.interest,
+          endDateAfter: res.product.endDate
+        })
+      }
+      invalidateCustomerRisk = true
+    } else if (action === 'product.delete') {
+      store.data.products = products.filter(function (product) { return product.id !== data.id })
+      store.data.statements = statements.filter(function (statement) { return statement.productId !== data.id })
+      invalidateCustomerRisk = true
+    } else if (action === 'finance.op') {
+      upsertById(products, res.product)
+      upsertById(statements, res.statement)
+      invalidateCustomerRisk = true
+    } else if (action === 'statement.void') {
+      var original = statements.find(function (statement) { return statement.id === data.id })
+      if (original && res.reverse) {
+        original.void = 'TRUE'
+        original.voidOf = res.reverse.id
+      }
+      upsertById(statements, res.reverse)
+      upsertById(products, res.product)
+      invalidateCustomerRisk = true
+    } else if (action === 'accounting.add') {
+      upsertById(accounting, res.entry)
+    } else if (action === 'accounting.void') {
+      var originalEntry = accounting.find(function (entry) { return entry.id === data.id })
+      if (originalEntry && res.reverse) {
+        originalEntry.void = 'TRUE'
+        originalEntry.voidOf = res.reverse.id
+      }
+      upsertById(accounting, res.reverse)
+    } else if (action === 'accounting.delete') {
+      store.data.accounting = accounting.filter(function (entry) { return entry.id !== data.id })
+    } else if (action === 'creditor.save') {
+      upsertById(store.data.creditors, res.creditor)
+    } else if (action === 'creditorMove.add') {
+      upsertById(store.data.creditorMoves, res.move)
+    } else if (action === 'type.save') {
+      upsertById(store.data.types, res.type)
+    } else if (action === 'type.delete') {
+      store.data.types = store.data.types.filter(function (type) { return type.id !== data.id })
+    } else if (action === 'due.save') {
+      upsertById(store.data.due, res.due)
+    } else if (action === 'user.save' && res.user) {
+      var user = Object.assign({}, res.user, {
+        active: data.active === false || data.active === 0 ? 0 : 1,
+        createdAt: todayStr()
+      })
+      upsertById(store.data.employees, user)
+    }
+    if (invalidateCustomerRisk) {
+      store.data.products = store.data.products.slice()
+      store.data.statements = store.data.statements.slice()
+    }
+    if (res.revision !== undefined) store.data.revision = String(res.revision)
+  }
+
   async function call(action, data, requestId) {
     if (!store.api) return { ok: false, error: 'no-api' }
     var rid = requestId || genId()
+    var requestData = data || {}
+    if (store.backendProvider === 'cloudflare' && store.data && store.data.revision !== undefined) {
+      requestData = Object.assign({}, requestData, { revision: store.data.revision })
+    }
     try {
-      var res = await store.api.call(action, data, rid, store.token)
+      var res = await store.api.call(action, requestData, rid, store.token)
+      applyCloudflareMutation(action, requestData, res)
       if (res && res.ok === false && res.error === 'auth') {
         store.user = null
         store.token = null
@@ -106,8 +195,12 @@
 
   async function refresh() {
     store.loading = true
-    var res = await call('bootstrap')
+    var data = store.backendProvider === 'cloudflare' && store.data && store.data.revision !== undefined
+      ? { revision: store.data.revision }
+      : {}
+    var res = await call('bootstrap', data)
     store.loading = false
+    if (res && res.ok && res.unchanged === true) return true
     if (res && res.ok) {
       store.data = res
       return true
@@ -654,7 +747,6 @@
     methods: {
       fmtDate: fmtDate, fmtMoney: fmtMoney, dueLabel: dueLabel, dueColorStyle: dueColorStyle, statusBadge: statusBadge, todayStr: todayStr
     },
-    mounted: function () { refresh() },
     template: '\
       <div v-if="!store.data" class="loading-state" role="status"><div class="spinner" aria-hidden="true"></div><span class="sr-only">กำลังโหลดข้อมูล</span></div>\
       <div v-else class="dashboard">\

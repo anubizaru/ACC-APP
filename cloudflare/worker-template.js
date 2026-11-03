@@ -243,7 +243,28 @@ async function __route(payload) {
   return route_(payload)
 }
 
-async function __loadState(db, requestedTables) {
+async function __selectRows(db, tableName, plan) {
+  var sql = 'SELECT * FROM "' + tableName + '"'
+  if (plan && plan.where) sql += ' WHERE ' + plan.where
+  if (plan && plan.orderBy) sql += ' ORDER BY ' + plan.orderBy
+  if (plan && plan.limit) sql += ' LIMIT ' + Number(plan.limit)
+  var statement = db.prepare(sql)
+  if (plan && plan.values && plan.values.length) {
+    statement = statement.bind.apply(statement, plan.values)
+  }
+  var result = await statement.all()
+  return result.results || []
+}
+
+function __appendRows(tableName, records) {
+  records.forEach(function (record) {
+    __tables[tableName].push(COLS[tableName].map(function (column) {
+      return record[column] === undefined || record[column] === null ? '' : record[column]
+    }))
+  })
+}
+
+async function __loadState(db, tablePlans, cacheKeys, seededRows, seededCacheRows) {
   __db = db
   __tables = {}
   __dirtyRows = {}
@@ -255,25 +276,44 @@ async function __loadState(db, requestedTables) {
     __tables[name] = [COLS[name].slice()]
   })
 
-  var tableNames = requestedTables || Object.keys(COLS)
-  var reads = tableNames.map(async function (tableName) {
-    var rows = await __readAll(db, 'SELECT * FROM "' + tableName + '" ORDER BY rowid')
-    rows.forEach(function (record) {
-      __tables[tableName].push(COLS[tableName].map(function (column) {
-        return record[column] === undefined || record[column] === null ? '' : record[column]
-      }))
-    })
+  var plans = tablePlans || Object.keys(COLS).reduce(function (result, name) {
+    result[name] = null
+    return result
+  }, {})
+  var initialRows = seededRows || {}
+  var tableNames = Object.keys(plans)
+  Object.keys(initialRows).forEach(function (tableName) {
+    if (tableNames.indexOf(tableName) < 0) tableNames.push(tableName)
   })
-  reads.push(__readAll(db, 'SELECT cache_key, cache_value, expires_at FROM PawnAuth').then(function (cacheRows) {
-    var now = Date.now()
-    cacheRows.forEach(function (row) {
-      if (Number(row.expires_at) > now) {
-        __cache[row.cache_key] = row.cache_value
-        __cacheExpiry[row.cache_key] = Number(row.expires_at)
-      } else __dirtyCacheKeys[row.cache_key] = true
-    })
-  }))
+  var reads = tableNames.map(async function (tableName) {
+    var rows = Object.prototype.hasOwnProperty.call(initialRows, tableName)
+      ? initialRows[tableName]
+      : plans[tableName]
+        ? await __selectRows(db, tableName, plans[tableName])
+        : await __readAll(db, 'SELECT * FROM "' + tableName + '" ORDER BY rowid')
+    __appendRows(tableName, rows)
+  })
+  var cacheRows = (seededCacheRows || []).slice()
+  var missingCacheKeys = (cacheKeys || []).filter(function (key) {
+    return !cacheRows.some(function (row) { return row.cache_key === key })
+  })
+  var cacheRead = Promise.resolve([])
+  if (missingCacheKeys.length) {
+    var placeholders = missingCacheKeys.map(function () { return '?' }).join(', ')
+    var cacheStatement = db.prepare(
+      'SELECT cache_key, cache_value, expires_at FROM PawnAuth WHERE cache_key IN (' + placeholders + ')'
+    )
+    cacheStatement = cacheStatement.bind.apply(cacheStatement, missingCacheKeys)
+    cacheRead = cacheStatement.all().then(function (result) { return result.results || [] })
+  }
   await Promise.all(reads)
+  cacheRows = cacheRows.concat(await cacheRead)
+  var now = Date.now()
+  cacheRows.forEach(function (row) {
+    __cache[row.cache_key] = row.cache_value
+    __cacheExpiry[row.cache_key] = Number(row.expires_at)
+    if (Number(row.expires_at) <= now) __dirtyCacheKeys[row.cache_key] = true
+  })
 }
 
 async function __readAll(db, sql) {
@@ -300,6 +340,9 @@ function __recordKey(columns, row) {
 
 async function __flushState() {
   var statements = []
+  var dataChanged = Object.keys(__dirtyRows).some(function (name) {
+    return name !== 'Operations' && Object.keys(__dirtyRows[name] || {}).length > 0
+  })
   Object.keys(COLS).forEach(function (name) {
     var dirtyRows = __dirtyRows[name]
     if (!dirtyRows) return
@@ -337,9 +380,17 @@ async function __flushState() {
     }
   })
 
+  if (dataChanged) {
+    statements.push(__db.prepare(
+      'INSERT INTO Config ("key", value) VALUES (?, ?) ' +
+      'ON CONFLICT("key") DO UPDATE SET value = CAST(value AS INTEGER) + 1'
+    ).bind('dataRevision', '1'))
+  }
+
   for (var start = 0; start < statements.length; start += 100) {
     await __db.batch(statements.slice(start, start + 100))
   }
+  return dataChanged
 }
 
 function __json(body, status, origin) {
@@ -418,6 +469,162 @@ async function __setup(request, env, origin) {
   return __json({ ok: true, setupDone: true }, 200, origin)
 }
 
+function __queryPlan(where, values, orderBy, limit) {
+  return { where: where, values: values || [], orderBy: orderBy || '', limit: limit || 0 }
+}
+
+function __addRequestIdPlan(plans, payload) {
+  if (!payload.requestId) payload.requestId = uuid_()
+  plans.Operations = __queryPlan('requestId = ?', [String(payload.requestId)])
+}
+
+async function __loadRequestState(db, payload) {
+  var action = payload.action
+  var data = payload.data || {}
+  var idempotentActions = [
+    'product.create', 'product.update', 'product.delete', 'finance.op', 'statement.void',
+    'accounting.add', 'accounting.void', 'accounting.delete', 'creditor.save',
+    'creditorMove.add', 'type.delete', 'user.save'
+  ]
+  if (idempotentActions.indexOf(action) >= 0 && !payload.requestId) payload.requestId = uuid_()
+  var plans = {}
+  var seededRows = {}
+  var seededCacheRows = []
+  var cacheKeys = []
+  var tokenCacheKey = ''
+  var userId = ''
+
+  if (action === 'login') {
+    plans.Employees = __queryPlan('email = ?', [String(data.email || '').trim().toLowerCase()])
+    cacheKeys.push('fail_' + String(data.email || '').trim().toLowerCase())
+  } else if (payload.token) {
+    tokenCacheKey = 'tk_' + await __tokenKey(payload.token)
+    seededCacheRows = await __selectRows(db, 'PawnAuth', __queryPlan('cache_key = ?', [tokenCacheKey]))
+    var session = seededCacheRows[0]
+    if (session && Number(session.expires_at) > Date.now()) {
+      userId = String(session.cache_value || '')
+      if (userId) plans.Employees = __queryPlan('id = ?', [userId])
+    }
+  }
+
+  if (action !== 'login' && action !== 'setupStatus' && !userId) {
+    await __loadState(db, {}, cacheKeys, seededRows, seededCacheRows)
+    return
+  }
+
+  if (action === 'bootstrap' && data.revision !== undefined) {
+    var revisionRows = await __selectRows(db, 'Config', __queryPlan('"key" = ?', ['dataRevision']))
+    var revision = revisionRows.length ? String(revisionRows[0].value) : '0'
+    if (String(data.revision) === revision) {
+      seededRows.Employees = await __selectRows(db, 'Employees', __queryPlan('id = ?', [userId]))
+      await __loadState(db, { Employees: __queryPlan('id = ?', [userId]) }, cacheKeys, seededRows, seededCacheRows)
+      payload.__unchangedRevision = revision
+      return
+    }
+  }
+
+  if (action === 'setupStatus') {
+    plans.Config = __queryPlan('"key" = ?', ['setupDone'])
+  } else if (action === 'bootstrap') {
+    ;['Employees', 'Products', 'Statements', 'Accounting', 'Creditors', 'CreditorMoves', 'Types', 'Due'].forEach(function (name) {
+      plans[name] = null
+    })
+    plans.Config = __queryPlan('"key" = ?', ['dataRevision'])
+  } else if (action === 'product.create') {
+    var requestedNo = data.productNo
+    plans.Products = requestedNo === undefined || requestedNo === null || requestedNo === ''
+      ? __queryPlan('', [], 'productNo DESC', 1)
+      : __queryPlan('productNo = ?', [requestedNo])
+    plans.Due = null
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'product.update') {
+    plans.Products = __queryPlan('id = ? OR productNo = ?', [
+      String(data.id || ''), data.productNo === undefined ? null : data.productNo
+    ])
+    plans.Statements = __queryPlan('productId = ?', [String(data.id || '')])
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'product.get' || action === 'product.delete') {
+    plans.Products = __queryPlan('id = ?', [String(data.id || '')])
+    plans.Statements = __queryPlan('productId = ?', [String(data.id || '')])
+    if (action === 'product.delete') __addRequestIdPlan(plans, payload)
+  } else if (action === 'finance.op') {
+    plans.Products = __queryPlan('id = ?', [String(data.id || '')])
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'statement.void') {
+    __addRequestIdPlan(plans, payload)
+    var targetStatements = await __selectRows(db, 'Statements', __queryPlan('id = ?', [String(data.id || '')]))
+    seededRows.Statements = targetStatements
+    var targetStatement = targetStatements[0]
+    if (targetStatement) {
+      plans.Operations = __queryPlan('requestId = ? OR requestId = ?', [
+        String(payload.requestId || ''), String(targetStatement.requestId || '')
+      ])
+      plans.Products = __queryPlan('id = ?', [String(targetStatement.productId || '')])
+    }
+  } else if (action === 'accounting.add') {
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'accounting.void' || action === 'accounting.delete') {
+    plans.Accounting = __queryPlan(
+      'id = ? OR voidOf = ?', [String(data.id || ''), String(data.id || '')]
+    )
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'creditor.save') {
+    if (data.id) plans.Creditors = __queryPlan('id = ?', [String(data.id)])
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'creditorMove.add') {
+    plans.Creditors = __queryPlan('id = ?', [String(data.creditorId || '')])
+    if (Number(data.refund) > 0) {
+      plans.CreditorMoves = __queryPlan('creditorId = ?', [String(data.creditorId || '')])
+    }
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'report.range') {
+    var start = String(data.start || '')
+    var end = String(data.end || '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+      seededRows.Statements = []
+      seededRows.Products = []
+    } else {
+      var reportStatements = await __selectRows(db, 'Statements', __queryPlan('date >= ? AND date <= ?', [start, end]))
+      seededRows.Statements = reportStatements
+      plans.Accounting = __queryPlan('date >= ? AND date <= ?', [start, end])
+      var productIds = []
+      reportStatements.forEach(function (statement) {
+        if (statement.productId && productIds.indexOf(String(statement.productId)) < 0) productIds.push(String(statement.productId))
+      })
+      var productRows = []
+      for (var offset = 0; offset < productIds.length; offset += 500) {
+        var ids = productIds.slice(offset, offset + 500)
+        if (!ids.length) continue
+        productRows = productRows.concat(await __selectRows(db, 'Products', __queryPlan(
+          'id IN (' + ids.map(function () { return '?' }).join(', ') + ')', ids
+        )))
+      }
+      seededRows.Products = productRows
+    }
+  } else if (action === 'type.save') {
+    if (data.id) plans.Types = __queryPlan('id = ?', [String(data.id)])
+  } else if (action === 'type.delete') {
+    plans.Types = null
+    plans.Products = __queryPlan('typeId = ?', [String(data.id || '')], 'rowid', 1)
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'due.save') {
+    var dueId = data.id || 'due-' + Number(data.due)
+    plans.Due = __queryPlan('id = ?', [String(dueId)])
+  } else if (action === 'user.save') {
+    var email = String(data.email || '').trim().toLowerCase()
+    plans.Employees = data.id
+      ? __queryPlan('id = ? OR id = ?', [String(data.id), userId])
+      : __queryPlan('id = ? OR email = ?', [userId, email])
+    __addRequestIdPlan(plans, payload)
+  } else if (action === 'user.password') {
+    var targetId = data.id ? String(data.id) : userId
+    plans.Employees = __queryPlan('id = ? OR id = ?', [userId, targetId])
+  }
+
+  if (action === 'login') cacheKeys.push('fail_' + String(data.email || '').trim().toLowerCase())
+  await __loadState(db, plans, cacheKeys, seededRows, seededCacheRows)
+}
+
 async function __handle(request, env) {
   var origin = request.headers.get('Origin') || '*'
   if (request.method === 'OPTIONS') {
@@ -442,25 +649,28 @@ async function __handle(request, env) {
   try { payload = await request.json() } catch (error) {
     return __json({ ok: false, error: 'invalid-json' }, 400, origin)
   }
-  var result = await env.DB.prepare('SELECT 1 FROM Employees LIMIT 1').first()
-  if (result === null) return __json({ ok: true, setupDone: false }, 200, origin)
-
   if (payload.action === 'ping') {
     return __json({ ok: true, service: 'pawnshop', version: 1 }, 200, origin)
   }
-  var tablesByAction = {
-    setupStatus: ['Config'],
-    login: ['Employees'],
-    me: ['Employees'],
-    logout: ['Employees'],
-    'user.password': ['Employees'],
-    'product.get': ['Employees', 'Products', 'Statements'],
-    'report.range': ['Employees', 'Products', 'Statements', 'Accounting'],
-    bootstrap: ['Employees', 'Products', 'Statements', 'Accounting', 'Creditors', 'CreditorMoves', 'Types', 'Due']
+  await __loadRequestState(env.DB, payload)
+  if (payload.__unchangedRevision !== undefined) {
+    var auth = await __route({ action: 'me', token: payload.token })
+    await __flushState()
+    if (!auth || auth.ok !== true) return __json(auth, 200, origin)
+    return __json({ ok: true, unchanged: true, revision: payload.__unchangedRevision }, 200, origin)
   }
-  await __loadState(env.DB, tablesByAction[payload.action])
   var response = await __route(payload)
-  await __flushState()
+  var dataChanged = await __flushState()
+  if (payload.action === 'bootstrap') {
+    response.revision = String(getConfig_('dataRevision') || '0')
+  } else if (dataChanged) {
+    var currentRevision = await env.DB.prepare('SELECT value FROM Config WHERE "key" = ?').bind('dataRevision').first()
+    response.revision = currentRevision ? String(currentRevision.value) : '0'
+    var clientRevision = payload.data && payload.data.revision
+    if (clientRevision !== undefined) {
+      response.refreshRequired = Number(response.revision) !== Number(clientRevision) + 1
+    }
+  }
   return __json(response, 200, origin)
 }
 

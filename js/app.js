@@ -211,9 +211,13 @@
     return p[2] + '/' + p[1] + '/' + p[0]
   }
   function fmtMoney(n) { return fmtBaht(n) }
-  var TYPE_LABEL = { new: 'รับสินค้าใหม่', interest: 'รับค่าบริการ', redeem: 'ไถ่ถอน', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า' }
+  var TYPE_LABEL = { new: 'รับสินค้าใหม่', interest: 'รับค่าบริการ', redeem: 'ไถ่ถอน', increase: 'เพิ่มต้น', reduce: 'ลดต้น', sale: 'ขายสินค้า', legacy: 'ประวัติเดิม' }
   function typeLabel(t) { return TYPE_LABEL[t] || t }
+  var riskIndexProducts = null
+  var riskIndexStatements = null
+  var riskIndexValue = null
   function customerRiskIndex(products, statements) {
+    if (products === riskIndexProducts && statements === riskIndexStatements) return riskIndexValue
     var productsByCustomer = Object.create(null)
     var statementsByProduct = Object.create(null)
     products.forEach(function (product) {
@@ -283,7 +287,10 @@
         chartStyle: { background: 'conic-gradient(' + stops.join(', ') + ')' }
       }
     })
-    return index
+    riskIndexProducts = products
+    riskIndexStatements = statements
+    riskIndexValue = index
+    return riskIndexValue
   }
 
   function dueLabel(due) {
@@ -973,7 +980,7 @@
 
   var Products = {
     data: function () {
-      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', showForm: false, editProduct: null, recordProduct: null, detailProductId: null, deletingProductId: '' }
+      return { store: store, q: '', filter: 'active', dueFilter: 'all', sortBy: 'productNo', sortDirection: 'desc', page: 1, pageSize: 50, showForm: false, editProduct: null, recordProduct: null, detailProductId: null, deletingProductId: '' }
     },
     computed: {
       isAdmin: function () { return store.user && store.user.role === 'admin' },
@@ -1019,6 +1026,23 @@
           return self.sortDirection === 'asc' ? productNoOrder : -productNoOrder
         })
         return out
+      },
+      pageCount: function () {
+        return Math.max(1, Math.ceil(this.list.length / this.pageSize))
+      },
+      visibleList: function () {
+        var start = (this.page - 1) * this.pageSize
+        return this.list.slice(start, start + this.pageSize)
+      }
+    },
+    watch: {
+      q: function () { this.page = 1 },
+      filter: function () { this.page = 1 },
+      dueFilter: function () { this.page = 1 },
+      sortBy: function () { this.page = 1 },
+      sortDirection: function () { this.page = 1 },
+      pageCount: function (count) {
+        if (this.page > count) this.page = count
       }
     },
     methods: {
@@ -1054,6 +1078,9 @@
         } else {
           this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'
         }
+      },
+      changePage: function (offset) {
+        this.page = Math.min(this.pageCount, Math.max(1, this.page + offset))
       }
     },
     setup: function () {
@@ -1091,7 +1118,7 @@
             <FlatIcon name="box" />\
             ไม่พบสินค้า\
           </div>\
-          <div v-for="p in list" :key="p.id" class="list-row clickable product-list-row" @click="detailProductId = p.id" :data-testid="\'card-product-\' + p.id">\
+          <div v-for="p in visibleList" :key="p.id" class="list-row clickable product-list-row" @click="detailProductId = p.id" :data-testid="\'card-product-\' + p.id">\
             <button type="button" class="prod-no" :style="dueColorStyle(p.due)" @click.stop="recordProduct = p" :aria-label="\'ดูรายละเอียดรายการสินค้าเลขที่ \' + p.productNo" title="ดูรายละเอียดรายการ" :data-testid="\'button-product-record-\' + p.id">{{ p.productNo }}</button>\
             <div class="grow">\
               <div class="title">{{ p.customerName }}</div>\
@@ -1108,6 +1135,14 @@
             </div>\
             <span class="product-status" v-html="statusBadge(p)"></span>\
             <button v-if="isAdmin" class="btn ghost sm product-delete-action" @click.stop="deleteProduct(p)" :disabled="!!deletingProductId" :aria-label="\'ลบสินค้าเลขที่ \' + p.productNo + \' พร้อมประวัติทั้งหมด\'" title="ลบสินค้าและประวัติทั้งหมด" :data-testid="\'button-delete-product-\' + p.id"><FlatIcon name="trash" /></button>\
+          </div>\
+          <div v-if="list.length > pageSize" class="row spread mt-4" aria-label="แบ่งหน้ารายการสินค้า">\
+            <span class="muted" style="font-size:var(--text-sm)">แสดง {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, list.length) }} จาก {{ fmtMoney(list.length) }} รายการ</span>\
+            <div class="row">\
+              <button type="button" class="btn ghost sm" @click="changePage(-1)" :disabled="page <= 1" data-testid="button-products-previous">ก่อนหน้า</button>\
+              <span class="muted" style="font-size:var(--text-sm);padding:0 10px">{{ page }} / {{ pageCount }}</span>\
+              <button type="button" class="btn ghost sm" @click="changePage(1)" :disabled="page >= pageCount" data-testid="button-products-next">ถัดไป</button>\
+            </div>\
           </div>\
         </div>\
         <ProductForm v-if="showForm" :product="editProduct" @close="showForm = false" @saved="editProduct = null" />\
@@ -1272,14 +1307,16 @@
       statements: function () {
         if (!store.data || !this.p) return []
         var pid = this.p.id
-        var out = store.data.statements.filter(function (s) { return s.productId === pid })
+        var out = store.data.statements.filter(function (s) {
+          return s.productId === pid && !(String(s.void).toLowerCase() === 'true' && !s.voidOf)
+        })
         out.sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1 })
         return out
       },
       statementTotals: function () {
         return this.statements.reduce(function (totals, statement) {
           totals.cashIn += cashInOf(statement)
-          totals.cashOut += Number(statement.pay) || 0
+          totals.cashOut += cashOutOf(statement)
           return totals
         }, { cashIn: 0, cashOut: 0 })
       },

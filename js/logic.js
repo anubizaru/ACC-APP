@@ -85,9 +85,11 @@ function dateDriff(endDate, startDate) {
 //   ดังนั้น "เงินสดรับเข้าจริง" ของร้าน = income + profit
 
 function cashInOf(st) {
+  if (String(st.void).toLowerCase() === 'true' && !st.voidOf) return 0
   return (Number(st.income) || 0) + (Number(st.profit) || 0)
 }
 function cashOutOf(st) {
+  if (String(st.void).toLowerCase() === 'true' && !st.voidOf) return 0
   return Number(st.pay) || 0
 }
 

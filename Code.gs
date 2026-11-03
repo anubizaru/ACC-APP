@@ -99,9 +99,11 @@ function dateDriff(endDate, startDate) {
 //   ดังนั้น "เงินสดรับเข้าจริง" ของร้าน = income + profit
 
 function cashInOf(st) {
+  if (String(st.void).toLowerCase() === 'true' && !st.voidOf) return 0
   return (Number(st.income) || 0) + (Number(st.profit) || 0)
 }
 function cashOutOf(st) {
+  if (String(st.void).toLowerCase() === 'true' && !st.voidOf) return 0
   return Number(st.pay) || 0
 }
 
@@ -1230,7 +1232,7 @@ function reportRange_(data, user) {
   for (var i = 0; i < sts.length; i++) {
     var s = sts[i]
     var v = String(s.void) === 'TRUE' || String(s.void) === 'true'
-    if (String(s.date) < start || String(s.date) > end) continue
+    if (String(s.date) < start || String(s.date) > end || (v && !s.voidOf)) continue
     // นับทั้งรายการเดิมและรายการกลับ (ติดลบ) ผลรวมจึงหักล้างเป็น 0 — เหมือนฝั่ง Accounting
     var p = byId[s.productId]
     statements.push({

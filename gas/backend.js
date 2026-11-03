@@ -940,7 +940,7 @@ function reportRange_(data, user) {
     var s = sts[i]
     var v = String(s.void) === 'TRUE' || String(s.void) === 'true'
     if (String(s.date) < start || String(s.date) > end) continue
-    if (v && s.voidOf) continue // รายการกลับถูกนับที่ตัวกลับเอง
+    if (v && !s.voidOf) continue
     var p = byId[s.productId]
     statements.push({
       id: s.id, productId: s.productId, type: s.type, date: String(s.date),

@@ -1,17 +1,32 @@
 var __tables = {}
-var __initialTables = {}
+var __dirtyRows = {}
 var __cache = {}
-var __initialCache = {}
-var __initialCacheExpiry = {}
 var __cacheExpiry = {}
+var __dirtyCacheKeys = Object.create(null)
 var __db = null
 var __requestQueue = Promise.resolve()
+
+function __rowKey(name, row) {
+  var columns = COLS[name]
+  var keyColumn = name === 'Config' ? 'key' : (name === 'Operations' ? 'requestId' : 'id')
+  var index = columns.indexOf(keyColumn)
+  return String(row[index] === undefined || row[index] === null ? '' : row[index])
+}
+
+function __markDirty(name, key, row) {
+  if (!__dirtyRows[name]) __dirtyRows[name] = Object.create(null)
+  __dirtyRows[name][key] = row
+}
 
 function __sheet(name) {
   if (!__tables[name]) return null
   var rows = __tables[name]
   return {
-    appendRow: function (row) { rows.push(row.slice()) },
+    appendRow: function (row) {
+      var copy = row.slice()
+      rows.push(copy)
+      __markDirty(name, __rowKey(name, copy), copy)
+    },
     getLastRow: function () { return rows.length },
     getMaxRows: function () { return Math.max(1000, rows.length) },
     setFrozenRows: function () {},
@@ -24,16 +39,24 @@ function __sheet(name) {
           for (var rowIndex = 0; rowIndex < numRows; rowIndex++) {
             while (rows.length < startRow + rowIndex) rows.push([])
             var row = rows[startRow + rowIndex - 1]
+            var oldKey = __rowKey(name, row)
             while (row.length < startColumn + numColumns - 1) row.push('')
             for (var columnIndex = 0; columnIndex < numColumns; columnIndex++) {
               row[startColumn + columnIndex - 1] = values[rowIndex][columnIndex]
             }
+            var newKey = __rowKey(name, row)
+            if (oldKey !== newKey) __markDirty(name, oldKey, null)
+            __markDirty(name, newKey, row)
           }
         },
         setNumberFormat: function () {}
       }
     },
-    deleteRow: function (rowNumber) { rows.splice(rowNumber - 1, 1) }
+    deleteRow: function (rowNumber) {
+      var row = rows[rowNumber - 1]
+      if (row && rowNumber > 1) __markDirty(name, __rowKey(name, row), null)
+      rows.splice(rowNumber - 1, 1)
+    }
   }
 }
 
@@ -58,6 +81,7 @@ var CacheService = {
         if (__cacheExpiry[key] && __cacheExpiry[key] <= Date.now()) {
           delete __cache[key]
           delete __cacheExpiry[key]
+          __dirtyCacheKeys[key] = true
           return null
         }
         return Object.prototype.hasOwnProperty.call(__cache, key) ? __cache[key] : null
@@ -65,10 +89,12 @@ var CacheService = {
       put: function (key, value, ttl) {
         __cache[key] = String(value)
         __cacheExpiry[key] = Date.now() + (Number(ttl) || 0) * 1000
+        __dirtyCacheKeys[key] = true
       },
       remove: function (key) {
         delete __cache[key]
         delete __cacheExpiry[key]
+        __dirtyCacheKeys[key] = true
       }
     }
   }
@@ -217,55 +243,54 @@ async function __route(payload) {
   return route_(payload)
 }
 
-async function __loadState(db) {
+async function __loadState(db, requestedTables) {
   __db = db
   __tables = {}
-  __initialTables = {}
+  __dirtyRows = {}
   __cache = {}
-  __initialCache = {}
-  __initialCacheExpiry = {}
   __cacheExpiry = {}
+  __dirtyCacheKeys = Object.create(null)
 
   Object.keys(COLS).forEach(function (name) {
     __tables[name] = [COLS[name].slice()]
   })
 
-  var tableNames = Object.keys(COLS)
-  for (var tableIndex = 0; tableIndex < tableNames.length; tableIndex++) {
-    var tableName = tableNames[tableIndex]
+  var tableNames = requestedTables || Object.keys(COLS)
+  var reads = tableNames.map(async function (tableName) {
     var rows = await __readAll(db, 'SELECT * FROM "' + tableName + '" ORDER BY rowid')
     rows.forEach(function (record) {
       __tables[tableName].push(COLS[tableName].map(function (column) {
         return record[column] === undefined || record[column] === null ? '' : record[column]
       }))
-    }
-    )
-  }
-  Object.keys(__tables).forEach(function (name) {
-    __initialTables[name] = __tables[name].map(function (row) { return row.slice() })
+    })
   })
-
-  var cacheRows = await __readAll(db, 'SELECT cache_key, cache_value, expires_at FROM PawnAuth')
-  var now = Date.now()
-  cacheRows.forEach(function (row) {
-    __initialCache[row.cache_key] = row.cache_value
-    __initialCacheExpiry[row.cache_key] = Number(row.expires_at)
-    if (Number(row.expires_at) > now) {
-      __cache[row.cache_key] = row.cache_value
-      __cacheExpiry[row.cache_key] = Number(row.expires_at)
-    }
-  })
+  reads.push(__readAll(db, 'SELECT cache_key, cache_value, expires_at FROM PawnAuth').then(function (cacheRows) {
+    var now = Date.now()
+    cacheRows.forEach(function (row) {
+      if (Number(row.expires_at) > now) {
+        __cache[row.cache_key] = row.cache_value
+        __cacheExpiry[row.cache_key] = Number(row.expires_at)
+      } else __dirtyCacheKeys[row.cache_key] = true
+    })
+  }))
+  await Promise.all(reads)
 }
 
 async function __readAll(db, sql) {
   var results = []
-  var offset = 0
+  var select = sql.replace(/^SELECT\s+/i, 'SELECT rowid AS __cursor, ')
+  var fromIndex = select.search(/\sFROM\s/i)
+  var tableAndWhere = select.slice(fromIndex)
+  var orderIndex = tableAndWhere.search(/\sORDER BY rowid\s*$/i)
+  if (orderIndex >= 0) tableAndWhere = tableAndWhere.slice(0, orderIndex)
+  var cursor = 0
   while (true) {
-    var page = await db.prepare(sql + ' LIMIT 500 OFFSET ?').bind(offset).all()
+    var page = await db.prepare(select.slice(0, fromIndex) +
+      tableAndWhere + ' WHERE rowid > ? ORDER BY rowid LIMIT 500').bind(cursor).all()
     var rows = page.results || []
-    results = results.concat(rows)
+    rows.forEach(function (row) { results.push(row) })
     if (rows.length < 500) return results
-    offset += rows.length
+    cursor = Number(rows[rows.length - 1].__cursor)
   }
 }
 
@@ -276,54 +301,35 @@ function __recordKey(columns, row) {
 async function __flushState() {
   var statements = []
   Object.keys(COLS).forEach(function (name) {
+    var dirtyRows = __dirtyRows[name]
+    if (!dirtyRows) return
     var columns = COLS[name]
     var keyColumn = name === 'Config' ? 'key' : (name === 'Operations' ? 'requestId' : 'id')
-    var keyIndex = columns.indexOf(keyColumn)
-    var initial = __initialTables[name] || []
-    var current = __tables[name] || []
-    var before = Object.create(null)
-    var after = Object.create(null)
-    for (var i = 1; i < initial.length; i++) {
-      var oldKey = String(initial[i][keyIndex] === undefined ? '' : initial[i][keyIndex])
-      before[oldKey] = initial[i]
-    }
-    for (var j = 1; j < current.length; j++) {
-      var key = String(current[j][keyIndex] === undefined ? '' : current[j][keyIndex])
-      after[key] = current[j]
-    }
-
-    Object.keys(before).forEach(function (key) {
-      if (!Object.prototype.hasOwnProperty.call(after, key)) {
+    Object.keys(dirtyRows).forEach(function (key) {
+      var row = dirtyRows[key]
+      if (!row) {
         statements.push(__db.prepare('DELETE FROM "' + name + '" WHERE "' + keyColumn + '" = ?').bind(key))
+        return
       }
-    })
-    Object.keys(after).forEach(function (key) {
-      var row = after[key]
-      var previous = before[key]
-      if (!previous || JSON.stringify(previous) !== JSON.stringify(row)) {
-        var values = row.map(function (value) { return value === undefined ? '' : value })
-        var placeholders = columns.map(function () { return '?' }).join(', ')
-        var updates = columns
-          .filter(function (column) { return column !== keyColumn })
-          .map(function (column) { return '"' + column + '" = excluded."' + column + '"' })
-          .join(', ')
-        var sql = 'INSERT INTO "' + name + '" (' +
-          columns.map(function (column) { return '"' + column + '"' }).join(', ') +
-          ') VALUES (' + placeholders + ') ON CONFLICT("' + keyColumn + '") DO UPDATE SET ' + updates
-        var statement = __db.prepare(sql)
-        statements.push(statement.bind.apply(statement, values))
-      }
+      var values = row.map(function (value) { return value === undefined ? '' : value })
+      var placeholders = columns.map(function () { return '?' }).join(', ')
+      var updates = columns
+        .filter(function (column) { return column !== keyColumn })
+        .map(function (column) { return '"' + column + '" = excluded."' + column + '"' })
+        .join(', ')
+      var sql = 'INSERT INTO "' + name + '" (' +
+        columns.map(function (column) { return '"' + column + '"' }).join(', ') +
+        ') VALUES (' + placeholders + ') ON CONFLICT("' + keyColumn + '") DO UPDATE SET ' + updates
+      var statement = __db.prepare(sql)
+      statements.push(statement.bind.apply(statement, values))
     })
   })
 
   var authTable = 'PawnAuth'
-  Object.keys(__initialCache).forEach(function (key) {
+  Object.keys(__dirtyCacheKeys).forEach(function (key) {
     if (!Object.prototype.hasOwnProperty.call(__cache, key)) {
       statements.push(__db.prepare('DELETE FROM "' + authTable + '" WHERE cache_key = ?').bind(key))
-    }
-  })
-  Object.keys(__cache).forEach(function (key) {
-    if (__cache[key] !== __initialCache[key] || __cacheExpiry[key] !== __initialCacheExpiry[key]) {
+    } else {
       statements.push(__db.prepare(
         'INSERT INTO "' + authTable + '" (cache_key, cache_value, expires_at) VALUES (?, ?, ?) ' +
         'ON CONFLICT(cache_key) DO UPDATE SET cache_value = excluded.cache_value, expires_at = excluded.expires_at'
@@ -439,7 +445,20 @@ async function __handle(request, env) {
   var result = await env.DB.prepare('SELECT 1 FROM Employees LIMIT 1').first()
   if (result === null) return __json({ ok: true, setupDone: false }, 200, origin)
 
-  await __loadState(env.DB)
+  if (payload.action === 'ping') {
+    return __json({ ok: true, service: 'pawnshop', version: 1 }, 200, origin)
+  }
+  var tablesByAction = {
+    setupStatus: ['Config'],
+    login: ['Employees'],
+    me: ['Employees'],
+    logout: ['Employees'],
+    'user.password': ['Employees'],
+    'product.get': ['Employees', 'Products', 'Statements'],
+    'report.range': ['Employees', 'Products', 'Statements', 'Accounting'],
+    bootstrap: ['Employees', 'Products', 'Statements', 'Accounting', 'Creditors', 'CreditorMoves', 'Types', 'Due']
+  }
+  await __loadState(env.DB, tablesByAction[payload.action])
   var response = await __route(payload)
   await __flushState()
   return __json(response, 200, origin)

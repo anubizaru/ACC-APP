@@ -109,7 +109,7 @@ function loadGas(adminEmail) {
   }
   const cache = makeMockCache()
   fn(mod, ss, PropertiesService, { getScriptCache: () => cache }, { getScriptLock: () => makeMockLock() }, Utilities, Logger, ContentService)
-  return mod.exports
+  return Object.assign(mod.exports, { __testSheets: sheets })
 }
 
 const scriptProps = {}
@@ -255,10 +255,20 @@ eq('closeStatus ล้างแล้ว', voidRes.product.closeStatus, '')
 
 // 15) รายงานช่วงวันนี้: รายการไถ่ถอนและรายการกลับหักล้างกัน เหลือเงินเข้า 50 + 300
 //     ส่วนเงินออก = จ่ายต้น 1000 + เพิ่มต้น 500
+const statementHeaders = G.__testSheets.Statements.rows[0]
+const duplicateVoid = {
+  id: 'voided-duplicate', productId: createRes.product.id, type: 'new', date: TODAY,
+  income: 0, pay: 1000, profit: 0, priceAfter: 1000, interestAfter: 50, dueAfter: 30,
+  endDateAfter: createRes.product.endDate, closeStatusAfter: '', note: 'รายการซ้ำซ้อน',
+  requestId: 'rq-voided-duplicate', createdBy: token, createdAt: TODAY + ' 00:00:00',
+  void: 'TRUE', voidOf: ''
+}
+G.__testSheets.Statements.rows.push(statementHeaders.map(header => duplicateVoid[header] === undefined ? '' : duplicateVoid[header]))
 const report = G.route_({ action: 'report.range', token: token, data: { start: TODAY, end: TODAY } })
 eq('รายงาน: cashIn = 50 + 300 (ไถ่ถอนและกลับรายการหักล้างกัน)', report.summary.cashIn, 350)
 eq('รายงาน: cashOut = 1000 + 500', report.summary.cashOut, 1500)
 eq('รายงาน: profit = 50 (ไถ่ถอนและกลับรายการหักล้างกัน)', report.summary.profit, 50)
+okTrue('รายการยกเลิกที่ไม่มีรายการกลับไม่ถูกรวมในรายงาน', !report.statements.some(statement => statement.id === 'voided-duplicate'))
 
 // 16) บัญชีร้าน: ห้ามกรอกขาออกขาเข้าพร้อมกัน
 eq('บัญชี: both-sides ปฏิเสธ', G.route_({ action: 'accounting.add', token: token, requestId: 'rq-acc-x', data: { title: 'ค่าไฟ', income: 100, pay: 100 } }), { ok: false, error: 'both-sides' })

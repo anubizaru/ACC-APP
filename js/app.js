@@ -775,7 +775,7 @@
           </div>\
         </section>\
         <section class="card follow-up-card" aria-labelledby="follow-up-title">\
-          <div class="card-title"><div><h3 id="follow-up-title">{{ selectedDate ? \'รายการตามวันที่ \' + fmtDate(selectedDate) : \'รายการที่ต้องติดตาม\' }}</h3><span class="muted">{{ selectedDate ? \'กำหนดชำระในวันที่เลือก\' : \'เกินกำหนดและครบกำหนดภายใน 7 วัน\' }}</span></div><a href=\\"#/products\\">ดูสินค้าทั้งหมด</a></div>\
+          <div class="card-title"><div><h3 id="follow-up-title">{{ selectedDate ? \'รายการตามวันที่ \' + fmtDate(selectedDate) : \'รายการที่ต้องติดตาม\' }}</h3><span class="muted">{{ selectedDate ? \'กำหนดชำระในวันที่เลือก\' : \'เกินกำหนดและครบกำหนดภายใน 7 วัน\' }}</span></div><a href="#/products">ดูสินค้าทั้งหมด</a></div>\
           <div v-if="dueSoon.length === 0" class="empty calendar-empty">{{ selectedDate ? \'ไม่มีรายการกำหนดชำระในวันที่เลือก\' : \'ไม่มีรายการที่ต้องติดตามใน 7 วันนี้\' }}</div>\
           <div v-else class="follow-up-table">\
             <div class="follow-up-row follow-up-head" aria-hidden="true"><span>เลขที่</span><span>ลูกค้า</span><span>รายการสินค้า</span><span>วันครบกำหนด</span><span class="money">เงินต้น</span></div>\
